@@ -1,17 +1,24 @@
 #include"log.h"
 namespace MindbniM
 {
-    Logger::Logger(const std::string& name):_name(name)
+    LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level,const char* file, int line)
+             :_logger(logger),_level(level),_file(file),_line(line)
+    {
+        _time=std::time(0);
+        _threadId=0;
+        _fiberId=0;
+    }
+    Logger::Logger(const std::string& name,LogLevel::Level level):_name(name),_level(level)
     {
     }
 
-    void Logger::log(LogLevel::Level level,LogEvent::ptr event)
+    void Logger::log(LogEvent::ptr event)
     {
-        if(level>=_level)
+        if(event->_level>=_level)
         {
             for(auto& i:_appenders)
             {
-                i->log(level,event);
+                i->log(event);
             }
         }
     }
@@ -44,11 +51,39 @@ namespace MindbniM
             it++;
         }
     }
-    void StdoutAppender::log(LogLevel::Level level,LogEvent::ptr event)
+    LogEventWrap::~LogEventWrap()
     {
-        if(level>=_level)
+        _event->_logger->log(_event);
+    }
+    std::stringstream &LogEventWrap::getSS()
+    {
+        return _event->_ss;
+    }
+    LoggerManager::LoggerManager()
+    {}
+    void LoggerManager::InitRoot(LogLevel::Level level)
+    {
+        _root=std::make_shared<Logger>("root",level);
+    }
+    Logger::ptr LoggerManager::getLogger(const std::string &name)
+    {
+        auto it=_loggers.find(name);
+        if(it!=_loggers.end()) return it->second;
+        return nullptr;
+    }
+    Logger::ptr LoggerManager::getRoot()
+    {
+        return _root;
+    }
+    LogAppender::LogAppender()
+    {
+        _format=std::make_shared<LogFormatter>();
+    }
+    void StdoutAppender::log(LogEvent::ptr event)
+    {
+        if(event->_level>=_level)
         {
-            std::cout<<_format->format(level,event);
+            std::cout<<_format->format(event);
         }
     }
     FileoutAppender::FileoutAppender(const std::string& filename):_filename(filename),_file(filename)
@@ -61,27 +96,27 @@ namespace MindbniM
         }
         _file.open(_filename);
     }
-    void FileoutAppender::log(LogLevel::Level level,LogEvent::ptr event)
+    void FileoutAppender::log(LogEvent::ptr event)
     {
-        if(level>=_level)
+        if(event->_level>=_level)
         {
-            _file<<_format->format(level,event);
+            _file<<_format->format(event);
         }
     }
     class MessageFormatItem : public LogFormatter::FormatItem
     {
     public:
         MessageFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
+        virtual void format(std::ostringstream &os,  LogEvent::ptr event) override
         {
-            os << event->_message;
+            os << event->_ss.str();
         }
     };
 
     std::string LogLevel::ToString(LogLevel::Level level)
     {
-      switch(level)
-      {
+        switch(level)
+        {
     #define XX(name) \
             case Level::name : \
             return #name; break; \
@@ -92,152 +127,94 @@ namespace MindbniM
         XX(ERROR)
         XX(FATAL)
     #undef XX
-      }
+        }
+        return "UNKONW";
     }
-    class LevelFormatItem : public LogFormatter::FormatItem
+    void LevelFormatItem::format(std::ostringstream &os,  LogEvent::ptr event) 
     {
-    public:
-        LevelFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << LogLevel::ToString(level);
-        }
-    };
-    class LineFormatItem : public LogFormatter::FormatItem
+        os << LogLevel::ToString(event->_level);
+    }
+    void LineFormatItem::format(std::ostringstream &os,  LogEvent::ptr event)
     {
-    public:
-        LineFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << event->_line;
-        }
-    };
-    class FilenameFormatItem : public LogFormatter::FormatItem
+        os << event->_line;
+    }
+    void FilenameFormatItem::format(std::ostringstream &os, LogEvent::ptr event) 
     {
-    public:
-        FilenameFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << event->_file;
-        }
-    };
-    class ThreadIdFormatItem : public LogFormatter::FormatItem
+        os << event->_file;
+    }
+
+    void ThreadIdFormatItem::format(std::ostringstream &os, LogEvent::ptr event)
     {
-    public:
-        ThreadIdFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << event->_threadId;
-        }
-    };
-    class FiberIdFormatItem : public LogFormatter::FormatItem
+        os << event->_threadId;
+    }
+    void FiberIdFormatItem::format(std::ostringstream &os,  LogEvent::ptr event)
     {
-    public:
-        FiberIdFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << event->_fiberId;
-        }
-    };
-    class NameFormatItem : public LogFormatter::FormatItem
+        os << event->_fiberId;
+    }
+    void NameFormatItem::format(std::ostringstream &os,  LogEvent::ptr event)
     {
-    public:
-        NameFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << event->_logger->getName();
-        }
-    };
-    class DateFormatItem : public LogFormatter::FormatItem
+        os << event->_logger->getName();
+    }
+    void DateFormatItem::format(std::ostringstream &os, LogEvent::ptr event)
     {
-    public:
-        DateFormatItem(const std::string format = "%Y-%m-%d %H:%M:%S") : _format(format) {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
+        struct tm tm;
+        time_t time = event->_time;
+        localtime_r(&time, &tm);
+        std::string str;
+        for (int i = 0; i < _format.size(); ++i)
         {
-            struct tm tm;
-            time_t time = event->_time;
-            localtime_r(&time, &tm);
-            std::string str;
-            for (int i = 0; i < _format.size(); ++i)
+            if (_format[i] != '%')
+                str.push_back(_format[i]);
+            else if (i + 1 < _format.size())
             {
-                if (_format[i] != '%')
-                    str.push_back(_format[i]);
-                else if (i + 1 < _format.size())
+                switch (_format[i + 1])
                 {
-                    switch (_format[i + 1])
-                    {
-                    case 'Y':
-                        str += std::to_string(tm.tm_year + 1900);
-                        break;
-                    case 'm':
-                        str += (tm.tm_mon + 1 < 10 ? "0" : "") + std::to_string(tm.tm_mon + 1);
-                        break;
-                    case 'd':
-                        str += (tm.tm_mday < 10 ? "0" : "") + std::to_string(tm.tm_mday);
-                        break;
-                    case 'H':
-                        str += (tm.tm_hour < 10 ? "0" : "") + std::to_string(tm.tm_hour);
-                        break;
-                    case 'M':
-                        str += (tm.tm_min < 10 ? "0" : "") + std::to_string(tm.tm_min);
-                        break;
-                    case 'S':
-                        str += (tm.tm_sec < 10 ? "0" : "") + std::to_string(tm.tm_sec);
-                        break;
-                    default:
-                        str.push_back('%');
-                        str.push_back(_format[i + 1]);
-                        break;
-                    }
-                    ++i;
+                case 'Y':
+                    str += std::to_string(tm.tm_year + 1900);
+                    break;
+                case 'm':
+                    str += (tm.tm_mon + 1 < 10 ? "0" : "") + std::to_string(tm.tm_mon + 1);
+                    break;
+                case 'd':
+                    str += (tm.tm_mday < 10 ? "0" : "") + std::to_string(tm.tm_mday);
+                    break;
+                case 'H':
+                    str += (tm.tm_hour < 10 ? "0" : "") + std::to_string(tm.tm_hour);
+                    break;
+                case 'M':
+                    str += (tm.tm_min < 10 ? "0" : "") + std::to_string(tm.tm_min);
+                    break;
+                case 'S':
+                    str += (tm.tm_sec < 10 ? "0" : "") + std::to_string(tm.tm_sec);
+                    break;
+                default:
+                    str.push_back('%');
+                    str.push_back(_format[i + 1]);
+                    break;
                 }
+                ++i;
             }
-            os << str;
         }
-
-    private:
-        std::string _format;
-    };
-    class NewLineFormatItem : public LogFormatter::FormatItem
+        os << str;
+    }
+    void NewLineFormatItem::format(std::ostringstream &os,  LogEvent::ptr event)
     {
-    public:
-        NewLineFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << std::endl;
-        }
-
-    private:
-    };
-    class TabFormatItem : public LogFormatter::FormatItem
+        os << std::endl;
+    }
+    void TabFormatItem::format(std::ostringstream &os,  LogEvent::ptr event)
     {
-    public:
-        TabFormatItem(const std::string &str = "") {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << "\t";
-        }
-
-    private:
-    };
-    class StringFormatItem : public LogFormatter::FormatItem
+        os << "\t";
+    }
+    void StringFormatItem::format(std::ostringstream &os, LogEvent::ptr event)
     {
-    public:
-        StringFormatItem(const std::string &str = "") : m_str(str) {}
-        virtual void format(std::ostringstream &os, LogLevel::Level level, LogEvent::ptr event) override
-        {
-            os << m_str;
-        }
-
-    private:
-        std::string m_str;
-    };
-    std::string LogFormatter::format(LogLevel::Level level, LogEvent::ptr event)
+        os << _str;
+    }
+    std::string LogFormatter::format(LogEvent::ptr event)
     {
         std::ostringstream os;
         for (auto &fmat : _items)
         {
-            fmat->format(os, level, event);
+            fmat->format(os,event);
         }
         return os.str();
     }
@@ -382,4 +359,5 @@ namespace MindbniM
             // std::cout<<std::get<0>(i)<<" "<<std::get<1>(i)<<" "<<std::get<2>(i)<<std::endl;
         }
     }
+
 }
