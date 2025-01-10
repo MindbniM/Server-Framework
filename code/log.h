@@ -8,10 +8,82 @@
 #include <map>
 #include <functional>
 #include <ctime>
+#include <cstdarg>
+#include "singleton.h"
 namespace MindbniM
 {
-    #define LOG_LEVEL(logger,level) MindbniM::LogEventWrap(std::make_shared<LogEvent>(logger,level,__FILE__,__LINE__)).getSS()
+/**
+ * @brief 以流式方式将日志等级level的日志写入到logger
+ */
+#define LOG_LEVEL(logger, level)     \
+    if (logger->getLevel() <= level)    MindbniM::LogEventWrap(std::make_shared<LogEvent>(logger, level, __FILE__, __LINE__)).getSS()
 
+/**
+ * @brief 以流式方式将日志等级debug的日志写入到logger
+ */
+#define LOG_DEBUG(logger) LOG_LEVEL(logger, LogLevel::Level::DEBUG)
+
+/**
+ * @brief 以流式方式将日志等级info的日志写入到logger
+ */
+#define LOG_INFO(logger) LOG_LEVEL(logger, LogLevel::Level::INFO)
+
+/**
+ * @brief 以流式方式将日志等级warning的日志写入到logger
+ */
+#define LOG_WARNING(logger) LOG_LEVEL(logger, LogLevel::Level::WARNING)
+
+/**
+ * @brief 以流式方式将日志等级error的日志写入到logger
+ */
+#define LOG_ERROR(logger) LOG_LEVEL(logger, LogLevel::Level::ERROR)
+
+/**
+ * @brief 以流式方式将日志等级fatal的日志写入到logger
+ */
+#define LOG_FATAL(logger) LOG_LEVEL(logger, LogLevel::Level::FATAL)
+
+/**
+ * @brief 以格式化方式将日志等级level的日志写入到logger
+ */
+#define LOG_FMT_LEVEL(logger, level, fmt, ...) \
+    if (level >= logger->getLevel())           \
+    MindbniM::LogEventWrap(std::make_shared<LogEvent>(logger, level, __FILE__, __LINE__)).getEvent()->format(fmt, ##__VA_ARGS__)
+
+/**
+ * @brief 以格式化方式将日志等级debug的日志写入到logger
+ */
+#define LOG_FMT_DEBUG(logger,fmt,...) LOG_FMT_LEVEL(logger,LogLevel::Level::DEBUG,fmt,##__VA_ARGS__)
+
+/**
+ * @brief 以格式化方式将日志等级info的日志写入到logger
+ */
+#define LOG_FMT_INFO(logger,fmt,...) LOG_FMT_LEVEL(logger,LogLevel::Level::INFO,fmt,##__VA_ARGS__)
+
+/**
+ * @brief 以格式化方式将日志等级warning的日志写入到logger
+ */
+#define LOG_FMT_WARNING(logger,fmt,...) LOG_FMT_LEVEL(logger,LogLevel::Level::WARNING,fmt,##__VA_ARGS__)
+
+/**
+ * @brief 以格式化方式将日志等级error的日志写入到logger
+ */
+#define LOG_FMT_ERROR(logger,fmt,...) LOG_FMT_LEVEL(logger,LogLevel::Level::ERROR,fmt,##__VA_ARGS__)
+
+/**
+ * @brief 以格式化方式将日志等级fatal的日志写入到logger
+ */
+#define LOG_FMT_FATAL(logger,fmt,...) LOG_FMT_LEVEL(logger,LogLevel::Level::FATAL,fmt,##__VA_ARGS__)
+
+/**
+ * @brief 获取主日志器
+ */
+#define LOG_ROOT() LoggerMgr::GetInstance()->getRoot()
+
+/**
+ * @brief 获取日志器
+ */
+#define LOG_Name(name) LoggerMgr::GetInstance()->getLogger(name)
 
     /**
      * @brief 日志级别
@@ -49,6 +121,9 @@ namespace MindbniM
          */
         LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, int line);
         LogEvent() {};
+
+        void format(const char *fmt, ...);
+        void format(const char *fmt, va_list list);
 
         const char *_file = nullptr;     // 文件名
         int32_t _line = 0;               // 行号
@@ -97,6 +172,7 @@ namespace MindbniM
      * @brief 默认日志格式
      */
     const std::string DEFAULT_FORMAT = "[%p][%d{%Y-%m-%d %H:%M:%S}][%f : %l]%m%n";
+
     /**
      * @brief 日志格式器
      *
@@ -260,7 +336,7 @@ namespace MindbniM
     {
     public:
         using ptr = std::shared_ptr<LogAppender>;
-        
+
         LogAppender();
 
         virtual void log(LogEvent::ptr event) = 0;
@@ -285,14 +361,13 @@ namespace MindbniM
         Logger(const std::string &name = "root", LogLevel::Level level = LogLevel::Level::DEBUG);
         void log(LogEvent::ptr event);
 
-        void debug(LogEvent::ptr event);
-        void info(LogEvent::ptr event);
-        void warning(LogEvent::ptr event);
-        void error(LogEvent::ptr event);
-        void fatal(LogEvent::ptr event);
-
         void addAppender(LogAppender::ptr appender);
+        void addAppender(const std::string& out);
+        void addAppender(const std::vector<std::string>& outs);
+
         void delAppender(LogAppender::ptr appender);
+
+        void clearAppender();
 
         LogLevel::Level getLevel() const { return _level; }
         void setLevel(LogLevel::Level level) { _level = level; }
@@ -312,7 +387,6 @@ namespace MindbniM
     {
     public:
         LoggerManager();
-        void InitRoot(LogLevel::Level level = LogLevel::Level::DEBUG);
         Logger::ptr getLogger(const std::string &name);
         Logger::ptr getRoot();
 
@@ -347,4 +421,6 @@ namespace MindbniM
         std::string _filename;
         std::ofstream _file;
     };
+
+    using LoggerMgr=Singleton<LoggerManager>;
 }

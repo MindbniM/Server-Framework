@@ -8,6 +8,23 @@ namespace MindbniM
         _threadId=0;
         _fiberId=0;
     }
+    void LogEvent::format(const char* fmt,...)
+    {
+        va_list al;
+        va_start(al,fmt);
+        format(fmt,al);
+        va_end(al);
+    }
+    void LogEvent::format(const char* fmt,va_list list)
+    {
+        char* str=nullptr;
+        int len=vasprintf(&str,fmt,list);
+        if(len>-1)
+        {
+            _ss<<std::string(str,len);
+            free(str);
+        }
+    }
     Logger::Logger(const std::string& name,LogLevel::Level level):_name(name),_level(level)
     {
     }
@@ -22,20 +39,27 @@ namespace MindbniM
             }
         }
     }
-    void Logger::debug(LogEvent::ptr event)
-    {}
-    void Logger::info(LogEvent::ptr event)
-    {}
-    void Logger::warning(LogEvent::ptr event)
-    {}
-    void Logger::error(LogEvent::ptr event)
-    {}
-    void Logger::fatal(LogEvent::ptr event)
-    {}
-
     void Logger::addAppender(LogAppender::ptr appender)
     {
         _appenders.push_back(appender);
+    }
+    void Logger::addAppender(const std::string& out)
+    {
+        if(out=="stdout")
+        {
+            addAppender(std::make_shared<StdoutAppender>());
+        }
+        else 
+        {
+            addAppender(std::make_shared<FileoutAppender>(out));
+        }
+    }
+    void Logger::addAppender(const std::vector<std::string>& outs)
+    {
+        for(auto& s:outs)
+        {
+            addAppender(s);
+        }
     }
 
     void Logger::delAppender(LogAppender::ptr appender)
@@ -51,6 +75,10 @@ namespace MindbniM
             it++;
         }
     }
+    void Logger::clearAppender()
+    {
+        _appenders.clear();
+    }
     LogEventWrap::~LogEventWrap()
     {
         _event->_logger->log(_event);
@@ -60,10 +88,8 @@ namespace MindbniM
         return _event->_ss;
     }
     LoggerManager::LoggerManager()
-    {}
-    void LoggerManager::InitRoot(LogLevel::Level level)
     {
-        _root=std::make_shared<Logger>("root",level);
+        _root=std::make_shared<Logger>("root");
     }
     Logger::ptr LoggerManager::getLogger(const std::string &name)
     {
@@ -218,18 +244,6 @@ namespace MindbniM
         }
         return os.str();
     }
-    // 默认格式 : "[%p][%d{%Y-%m-%d %H:%M:%S}][%f : %l]%m%n"
-    // 可选格式:
-    //*  %m 消息
-    //*  %p 日志级别
-    //*  %c 日志名称
-    //*  %t 线程id
-    //*  %n 换行
-    //*  %d 时间
-    //*  %f 文件名
-    //*  %l 行号
-    //*  %T 制表符
-    //*  %F 协程id
     void LogFormatter::init()
     {
         std::vector<std::tuple<std::string, std::string, int>> vec;
