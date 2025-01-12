@@ -10,6 +10,7 @@
 #include <ctime>
 #include <cstdarg>
 #include "singleton.h"
+#include "config.hpp"
 namespace MindbniM
 {
 /**
@@ -85,6 +86,7 @@ namespace MindbniM
  */
 #define LOG_Name(name) LoggerMgr::GetInstance()->getLogger(name)
 
+
     /**
      * @brief 日志级别
      */
@@ -103,6 +105,7 @@ namespace MindbniM
          * @brief 日志级别转换字符串
          */
         std::string static ToString(LogLevel::Level level);
+        LogLevel::Level static FromString(const std::string& str);
     };
 
     class Logger;
@@ -423,4 +426,45 @@ namespace MindbniM
     };
 
     using LoggerMgr=Singleton<LoggerManager>;
+
+
+    template<>
+    class LexicalCast<LoggerManager*,std::string>
+    {
+    public:
+        std::string operator()(const LoggerManager* logs)
+        {
+
+        }
+    };
+    template<>
+    class LexicalCast<std::string,LoggerManager*>
+    {
+    public:
+        LoggerManager* operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            for(const auto&node:root)
+            {
+                if(!node["name"].IsDefined())
+                {
+                    throw std::logic_error("log config error: name is null");
+                }
+                std::string name=node["name"].as<std::string>();
+                LogLevel::Level level=LogLevel::Level::DEBUG;
+                if(node["level"])
+                {
+                    level=LogLevel::FromString(node["level"].as<std::string>());
+                }
+                
+
+
+            }
+        }
+    };
+    namespace Configs
+    {
+        ConfigVar<LoggerManager*>::ptr g_logs=Config::Lookup("logs",LoggerMgr::GetInstance());
+    }
+
 }

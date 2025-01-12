@@ -156,6 +156,18 @@ namespace MindbniM
         }
         return "UNKONW";
     }
+    LogLevel::Level LogLevel::FromString(const std::string& str)
+    {
+        std::string le=str;
+        std::transform(le.begin(),le.end(),le.begin(),::tolower);
+    #define XX(str,level) if(le==str) return LogLevel::Level(LogLevel::Level::level);
+        XX("info",INFO)
+        XX("debug",DEBUG)
+        XX("warning",WARNING)
+        XX("error",ERROR)
+        XX("fatal",FATAL)
+    #undef XX
+    }
     void LevelFormatItem::format(std::ostringstream &os,  LogEvent::ptr event) 
     {
         os << LogLevel::ToString(event->_level);
