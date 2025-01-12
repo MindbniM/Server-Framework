@@ -4,6 +4,8 @@
 #include <list>
 #include <boost/lexical_cast.hpp>
 #include <yaml-cpp/yaml.h>
+#include <unordered_map>
+#include <unordered_set>
 namespace MindbniM
 {
     /**
@@ -67,15 +69,265 @@ namespace MindbniM
          * @return 返回转换类型后的值
          * @exception boost库会在类型不能转换时抛出异常
          */
-        V operator()(T &&t)
-        {
-            return boost::lexical_cast<V>(std::forward<T>(t));
-        }
         V operator()(const T& t)
         {
             return boost::lexical_cast<V>(t);
         }
     };
+    
+
+    /**
+     * @brief 偏特化 string -> vector<T>
+     */
+    template<class T>
+    class LexicalCast<std::string,std::vector<T>>
+    {
+    public:
+        std::vector<T> operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            std::vector<T> ret;
+            std::stringstream ss;
+            for(const auto& node:root)
+            {
+                ss.str("");
+                ss<<node;
+                ret.push_back(LexicalCast<std::string,T>()(ss.str()));
+            }
+            return ret;
+        }
+    };
+
+    /**
+     * @brief 偏特化 vector<T> -> string
+     */
+    template<class T>
+    class LexicalCast<std::vector<T>,std::string>
+    {
+    public:
+        std::string operator()(const std::vector<T>& vec)
+        {
+            YAML::Node root(YAML::NodeType::Sequence);
+            for(auto& i:vec)
+            {
+                root.push_back(YAML::Load(LexicalCast<T,std::string>()(i)));
+            }
+            std::stringstream ss;
+            ss<<root;
+            return ss.str();
+        }
+    };
+
+    /**
+     * @brief 偏特化 string -> list<T>
+     */
+    template<class T>
+    class LexicalCast<std::string,std::list<T>>
+    {
+    public:
+        std::list<T> operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            std::list<T> ret;
+            std::stringstream ss;
+            for(const auto& node:root)
+            {
+                ss.str("");
+                ss<<node;
+                ret.push_back(LexicalCast<std::string,T>()(ss.str()));
+            }
+            return ret;
+        }
+    };
+
+    /**
+     * @brief 偏特化 list<T> -> string
+     */
+    template<class T>
+    class LexicalCast<std::list<T>,std::string>
+    {
+    public:
+        std::string operator()(const std::list<T>& list)
+        {
+            YAML::Node root(YAML::NodeType::Sequence);
+            for(auto& i:list)
+            {
+                root.push_back(YAML::Load(LexicalCast<T,std::string>()(i)));
+            }
+            std::stringstream ss;
+            ss<<root;
+            return ss.str();
+        }
+    };
+
+    /**
+     * @brief 偏特化 string -> unordered_set<T>
+     */
+    template<class T>
+    class LexicalCast<std::string,std::unordered_set<T>>
+    {
+    public:
+        std::unordered_set<T> operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            std::unordered_set<T> ret;
+            std::stringstream ss;
+            for(const auto& node:root)
+            {
+                ss.str("");
+                ss<<node;
+                ret.insert(LexicalCast<std::string,T>()(ss.str()));
+            }
+            return ret;
+        }
+    };
+
+    /**
+     * @brief 偏特化 unordered_set<T> -> string
+     */
+    template<class T>
+    class LexicalCast<std::unordered_set<T>,std::string>
+    {
+    public:
+        std::string operator()(const std::unordered_set<T>& uset)
+        {
+            YAML::Node root(YAML::NodeType::Sequence);
+            for(auto& i:uset)
+            {
+                root.push_back(YAML::Load(LexicalCast<T,std::string>()(i)));
+            }
+            std::stringstream ss;
+            ss<<root;
+            return ss.str();
+        }
+    };
+
+    /**
+     * @brief 偏特化 string -> set<T>
+     */
+    template<class T>
+    class LexicalCast<std::string,std::set<T>>
+    {
+    public:
+        std::set<T> operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            std::set<T> ret;
+            std::stringstream ss;
+            for(const auto& node:root)
+            {
+                ss.str("");
+                ss<<node;
+                ret.insert(LexicalCast<std::string,T>()(ss.str()));
+            }
+            return ret;
+        }
+    };
+
+    /**
+     * @brief 偏特化 set<T> -> string
+     */
+    template<class T>
+    class LexicalCast<std::set<T>,std::string>
+    {
+    public:
+        std::string operator()(const std::set<T>& set)
+        {
+            YAML::Node root(YAML::NodeType::Sequence);
+            for(auto& i:set)
+            {
+                root.push_back(YAML::Load(LexicalCast<T,std::string>()(i)));
+            }
+            std::stringstream ss;
+            ss<<root;
+            return ss.str();
+        }
+    };
+
+    /**
+     * @brief 偏特化 string -> unordered_map<std::string,T>
+     */
+    template<class T>
+    class LexicalCast<std::string,std::unordered_map<std::string,T>>
+    {
+    public:
+        std::unordered_map<std::string,T> operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            std::unordered_map<std::string,T> ret;
+            std::stringstream ss;
+            for(const auto& node:root)
+            {
+                ss.str("");
+                ss<<node.second;
+                ret[node.first.Scalar()]=LexicalCast<std::string,T>()(ss.str());
+            }
+            return ret;
+        }
+    };
+
+    /**
+     * @brief 偏特化 unordered_map<std::string,T> -> string
+     */
+    template<class T>
+    class LexicalCast<std::unordered_map<std::string,T>,std::string>
+    {
+    public:
+        std::string operator()(const std::unordered_map<std::string,T>& umap)
+        {
+            YAML::Node root(YAML::NodeType::Map);
+            for(auto& [x,y]:umap)
+            {
+                root[x]=YAML::Load(LexicalCast<T,std::string>()(y));
+            }
+            std::stringstream ss;
+            ss<<root;
+            return ss.str();
+        }
+    };
+
+    /**
+     * @brief 偏特化 string -> map<std::string,T>
+     */
+    template<class T>
+    class LexicalCast<std::string,std::map<std::string,T>>
+    {
+    public:
+        std::map<std::string,T> operator()(const std::string& str)
+        {
+            YAML::Node root=YAML::Load(str);
+            std::map<std::string,T> ret;
+            std::stringstream ss;
+            for(const auto& node:root)
+            {
+                ss.str("");
+                ss<<node.second;
+                ret[node.first.Scalar()]=LexicalCast<std::string,T>()(ss.str());
+            }
+            return ret;
+        }
+    };
+
+    /**
+     * @brief 偏特化 map<std::string,T> -> string
+     */
+    template<class T>
+    class LexicalCast<std::map<std::string,T>,std::string>
+    {
+    public:
+        std::string operator()(const std::map<std::string,T>& umap)
+        {
+            YAML::Node root(YAML::NodeType::Map);
+            for(auto& [x,y]:umap)
+            {
+                root[x]=YAML::Load(LexicalCast<T,std::string>()(y));
+            }
+            std::stringstream ss;
+            ss<<root;
+            return ss.str();
+        }
+    };
+
 
     /**
      * @brief 配置模板类, 保存配置信息
@@ -95,7 +347,7 @@ namespace MindbniM
          * @param[in] val  参数初始化值
          * @param[in] desc 参数详细
          */
-        ConfigVar(const std::string &name, T &&val, const std::string &desc = "") : ConfigVarBase(name, desc), _val(val)
+        ConfigVar(const std::string &name,const T &val, const std::string &desc = "") : ConfigVarBase(name, desc), _val(val)
         {
         }
 
@@ -132,7 +384,7 @@ namespace MindbniM
             }
             catch(const std::exception& e)
             {
-                LOG_ERROR(LOG_ROOT())<<"ConfigVar::fromString exception " << e.what() << " convert: string to " << Util::TypeToName<T>() << " name=" << _name << " - " << _val;
+                LOG_ERROR(LOG_ROOT())<<"ConfigVar::fromString exception " << e.what() << " convert: string to " << Util::TypeToName<T>() << " name=" << _name;
             }
             return false;
         }
@@ -177,11 +429,12 @@ namespace MindbniM
             }
             return std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
         }
+
         /**
          * @brief 用名称查找一个配置项, 如果不存在就创建
          */
         template <class T>
-        static typename ConfigVar<T>::ptr Lookup(const std::string &name, T &&val, const std::string &desc = "")
+        static typename ConfigVar<T>::ptr Lookup(const std::string &name,const T &val, const std::string &desc = "")
         {
             auto temp = Lookup<T>(name);
             if (temp)
@@ -194,7 +447,7 @@ namespace MindbniM
                 LOG_ERROR(LOG_ROOT()) << "Lookup name invalid " << name;
                 throw std::invalid_argument(name);
             }
-            typename ConfigVar<T>::ptr p = std::make_shared<ConfigVar<T>>(name, std::forward<T>(val), desc);
+            typename ConfigVar<T>::ptr p = std::make_shared<ConfigVar<T>>(name, val, desc);
             s_datas[name] = p;
             return p;
         }
@@ -247,7 +500,7 @@ namespace MindbniM
                 {
                     if(node.IsScalar())
                     {
-                        p->fromString(str);
+                        p->fromString(node.Scalar());
                     }
                     else
                     {
@@ -256,6 +509,7 @@ namespace MindbniM
                         p->fromString(ss.str());
                     }
                 }
+                else LOG_DEBUG(LOG_ROOT())<<str;
             }
         }
 
