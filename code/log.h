@@ -171,7 +171,7 @@ namespace MindbniM
     /**
      * @brief 默认日志格式
      */
-    const std::string DEFAULT_FORMAT = "[%p][%d{%Y-%m-%d %H:%M:%S}][%f : %l]%m%n";
+    const std::string DEFAULT_FORMAT = "[%p][%d{%Y-%m-%d %H:%M:%S}][%f:%l]%m%n";
 
     /**
      * @brief 日志格式器
