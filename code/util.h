@@ -15,7 +15,9 @@ namespace MindbniM
             return s_name;
         }
 
-
+        /**
+         * @brief 判断名称是否合法
+         */
         bool isValidName(const std::string& name);
     }
 }

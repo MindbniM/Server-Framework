@@ -3,6 +3,9 @@
 namespace MindbniM
 {
 
+    /**
+     * @brief 全特化 LoggerManager* -> string
+     */
     template<>
     class LexicalCast<LoggerManager*,std::string>
     {
@@ -16,6 +19,11 @@ namespace MindbniM
             return ss.str();
         }
     };
+
+    /**
+     * @brief 全特化 string -> LoggerManger* 
+     * 从YAML读取配置
+     */
     template<>
     class LexicalCast<std::string,LoggerManager*>
     {
@@ -28,8 +36,13 @@ namespace MindbniM
             return LogMer;
         }
     };
+
+    /**
+     * @brief 全局配置
+     */
     namespace Configs
     {
+        //这是日志配置
         ConfigVar<LoggerManager*>::ptr g_logs=Config::Lookup("logs",LoggerMgr::GetInstance(),"logs config");
     }
 

@@ -342,6 +342,7 @@ namespace MindbniM
     {
     public:
         using ptr = std::shared_ptr<ConfigVar>;
+        //配置改变回调函数
         using CallBack=std::function<void(const T& old_val,const T& new_val)>;
 
         /**
@@ -354,8 +355,15 @@ namespace MindbniM
         {
         }
 
+        /**
+         * @brief 获取配置的值
+         */
         T getVal() const {return _val;}
 
+        /**
+         * @brief 修改配置的值
+         * 返回变化调回调函数
+         */
         void setVal(const T& val)
         {
             if(val==_val) return;
@@ -383,6 +391,10 @@ namespace MindbniM
             return "";
         }
 
+        /**
+         * @brief 从YAML String获取参数值
+         * @exception 转换失败抛出异常
+         */
         virtual bool fromString(const std::string &str) override
         {
             try
@@ -397,11 +409,17 @@ namespace MindbniM
             return false;
         }
 
+        /**
+         * @brief 获取类型名
+         */
         virtual std::string getTypeName() const override
         {
             return Util::TypeToName<T>();
         }
 
+        /**
+         * @brief 添加回调
+         */
         uint64_t addCallBack(const CallBack& cb)
         {
             static std::atomic<uint64_t> s_id(0);
@@ -410,6 +428,9 @@ namespace MindbniM
             return s_id;
         }
 
+        /**
+         * @brief 删除回调
+         */
         void delCallBack(uint64_t key)
         {
             _cbs.erase(key);

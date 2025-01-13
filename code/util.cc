@@ -9,6 +9,5 @@ namespace MindbniM
             if(it!=std::string::npos)  return false;
             return true;
         }
-
     }
 }

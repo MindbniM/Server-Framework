@@ -105,6 +105,10 @@ namespace MindbniM
          * @brief 日志级别转换字符串
          */
         std::string static ToString(LogLevel::Level level);
+
+        /**
+         * @brief 字符串 -> 日志级别转
+         */
         LogLevel::Level static FromString(const std::string& str);
     };
 
@@ -125,6 +129,9 @@ namespace MindbniM
         LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, int line);
         LogEvent() {};
 
+        /**
+         * @brief 格式化到日志流
+         */
         void format(const char *fmt, ...);
         void format(const char *fmt, va_list list);
 
@@ -343,18 +350,41 @@ namespace MindbniM
     public:
         using ptr = std::shared_ptr<LogAppender>;
 
+        /**
+         * @brief 默认初始化格式和最低日志等级
+         */
         LogAppender();
 
+        /**
+         * @brief 写入日志
+         */
         virtual void log(LogEvent::ptr event) = 0;
 
+        /**
+         * @brief 获取日志格式
+         */
         LogFormatter::ptr getFormat() const { return _format; }
+
+        /**
+         * @brief 修改日志格式
+         */
         void setFormat(LogFormatter::ptr format) { _format = format; }
 
+        /**
+         * @brief 获取日志输出地的名称
+         */
         virtual std::string getout()=0;
 
         virtual ~LogAppender() {}
 
+        /**
+         * @brief 从YAML中读取配置
+         */
         bool FromYaml(const YAML::Node& root);
+
+        /**
+         * @brief 格式化到YAML
+         */
         bool ToYaml(YAML::Node& root);
     protected:
         LogLevel::Level _level;
@@ -368,17 +398,50 @@ namespace MindbniM
     {
     public:
         using ptr = std::shared_ptr<Logger>;
+
         Logger(const std::string &name = "root", LogLevel::Level level = LogLevel::Level::DEBUG);
+
+        /**
+         * @brief 向所有日志输出地输出日志
+         */
         void log(LogEvent::ptr event);
 
+        /**
+         * @brief 添加一个日志输出地
+         */
         void addAppender(LogAppender::ptr appender);
+
+        /**
+         * @brief 添加一个日志输出地
+         * @param[in] out 输出地名称[stdout/filename]
+         */
         void addAppender(const std::string& out);
+
+        /**
+         * @brief 添加一个日志输出地
+         * @param[in] out 输出地名称[stdout/filename]
+         * @param[in] fomatter 日志格式
+         */
         void addAppender(const std::string& out,const std::string& formatter);
+
+        /**
+         * @brief 添加多个日志输出地
+         */
         void addAppender(const std::vector<std::string>& outs);
+
+        /**
+         * @brief 获取一个日志输出地, 可能进行修改
+         */
         LogAppender::ptr getAppender(const std::string& out);
 
+        /**
+         * @brief 删除一个日志输出地
+         */
         void delAppender(LogAppender::ptr appender);
 
+        /**
+         * @brief 删除所有日志输出地
+         */
         void clearAppender();
 
         LogLevel::Level getLevel() const { return _level; }
@@ -386,12 +449,19 @@ namespace MindbniM
 
         std::string getName() const { return _name; }
 
+        /**
+         * @brief 从YAML中读取配置
+         */
         bool FromYaml(const YAML::Node& root);
+
+        /**
+         * @brief 格式化到YAML
+         */
         bool ToYaml(YAML::Node& root);
     private:
-        std::string _name;
-        LogLevel::Level _level;
-        std::unordered_map<std::string,LogAppender::ptr> _appenders;
+        std::string _name;                                              //日志器名称
+        LogLevel::Level _level;                                         //日志最低等级
+        std::unordered_map<std::string,LogAppender::ptr> _appenders;    //日志输出地集合
     };
 
     /**
@@ -406,14 +476,25 @@ namespace MindbniM
          * @brief 获取指定日志器, 如果不存在就创建
          */
         Logger::ptr getLogger(const std::string &name);
+
+        /**
+         * @brief 获取root日志器
+         */
         Logger::ptr getRoot();
 
+        /**
+         * @brief 从YAML中读取配置
+         */
         bool FromYaml(const YAML::Node& root);
+
+        /**
+         * @brief 格式化到YAML
+         */
         bool ToYaml(YAML::Node& root)const ;
 
     private:
-        Logger::ptr _root;
-        std::map<std::string, Logger::ptr> _loggers;
+        Logger::ptr _root;                              //root日志器
+        std::map<std::string, Logger::ptr> _loggers;    //日志器集合
     };
 
     /**
@@ -436,6 +517,10 @@ namespace MindbniM
         using ptr = std::shared_ptr<FileoutAppender>;
 
         FileoutAppender(const std::string &filename);
+
+        /**
+         * @brief 重新打开文件
+         */
         void reopen();
         virtual void log(LogEvent::ptr event) override;
         virtual std::string getout() override;
