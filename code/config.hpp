@@ -6,6 +6,8 @@
 #include <yaml-cpp/yaml.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <functional>
+#include <atomic>
 namespace MindbniM
 {
     /**
@@ -340,6 +342,7 @@ namespace MindbniM
     {
     public:
         using ptr = std::shared_ptr<ConfigVar>;
+        using CallBack=std::function<void(const T& old_val,const T& new_val)>;
 
         /**
          * @brief 构造函数
@@ -355,6 +358,11 @@ namespace MindbniM
 
         void setVal(const T& val)
         {
+            if(val==_val) return;
+            for(auto&[_,cb]:_cbs)
+            {
+                cb(_val,val);
+            }
             _val=val;
         }
 
@@ -394,8 +402,21 @@ namespace MindbniM
             return Util::TypeToName<T>();
         }
 
+        uint64_t addCallBack(const CallBack& cb)
+        {
+            static std::atomic<uint64_t> s_id(0);
+            s_id++;
+            _cbs[s_id]=cb;
+            return s_id;
+        }
+
+        void delCallBack(uint64_t key)
+        {
+            _cbs.erase(key);
+        }
     private:
         T _val;
+        std::map<uint64_t,CallBack> _cbs;
     };
 
     /**
@@ -407,10 +428,14 @@ namespace MindbniM
     public:
         using ConfigVarMap = std::map<std::string, ConfigVarBase::ptr>;
 
+        /**
+         * @brief 名称查找配置项
+         * @return 返回基类指针
+         */
         static ConfigVarBase::ptr LookupBase(const std::string& name)
         {
-            auto it=s_datas.find(name);
-            if(it==s_datas.end())
+            auto it=GetConfigVarMap().find(name);
+            if(it==GetConfigVarMap().end())
             {
                 return nullptr;
             }
@@ -422,8 +447,8 @@ namespace MindbniM
         template <class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string &name)
         {
-            auto it = s_datas.find(name);
-            if (it == s_datas.end())
+            auto it = GetConfigVarMap().find(name);
+            if (it == GetConfigVarMap().end())
             {
                 return nullptr;
             }
@@ -432,23 +457,42 @@ namespace MindbniM
 
         /**
          * @brief 用名称查找一个配置项, 如果不存在就创建
+         * 查找有以下几种情况
+         * 1. 存在&&类型也相同
+         * 2. 存在&&类型不同
+         * 3. 不存在
+         * @param[in] name 配置名
+         * @param[in] val 初始化值
+         * @param[in] desc 配置描述
+         * @return 返回对应的ConfigVar智能指针
          */
         template <class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string &name,const T &val, const std::string &desc = "")
         {
-            auto temp = Lookup<T>(name);
-            if (temp)
+            auto it = GetConfigVarMap().find(name);
+            if (it != GetConfigVarMap().end())
             {
-                LOG_INFO(LOG_ROOT()) << "Lookup name=" << name << " exists";
-                return temp;
-            }
-            if (!Util::isValidName(name))
-            {
-                LOG_ERROR(LOG_ROOT()) << "Lookup name invalid " << name;
-                throw std::invalid_argument(name);
+                auto temp=std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
+                if (temp)
+                {
+                    LOG_INFO(LOG_ROOT()) << "Lookup name=" << name << " exists";
+                    return temp;
+                }
+                else
+                {
+                    LOG_ERROR(LOG_ROOT()) << "Lookup name=" << name << " exists but type not "
+                            << Util::TypeToName<T>() << " real_type=" << it->second->getTypeName()
+                            << " " << it->second->toString();
+                    return nullptr;
+                }
+                if (!Util::isValidName(name))
+                {
+                    LOG_ERROR(LOG_ROOT()) << "Lookup name invalid " << name;
+                    throw std::invalid_argument(name);
+                }
             }
             typename ConfigVar<T>::ptr p = std::make_shared<ConfigVar<T>>(name, val, desc);
-            s_datas[name] = p;
+            GetConfigVarMap()[name] = p;
             return p;
         }
 
@@ -509,12 +553,18 @@ namespace MindbniM
                         p->fromString(ss.str());
                     }
                 }
-                else LOG_DEBUG(LOG_ROOT())<<str;
             }
         }
 
-    private:
-        static ConfigVarMap s_datas;
+        /**
+         * @brief 获取一个全局变量
+         * 如果直接类中声明 static ConfigVarMap s_configs并在外定义, 如果这个模板类被多个.cc文件同时包含
+         * 那么在链接时就会出现重复定义的情况, 如果写在函数里面, 就可避免这个错误
+         */
+        static ConfigVarMap& GetConfigVarMap()
+        {
+            static ConfigVarMap s_configs;
+            return s_configs;
+        }
     };
-    Config::ConfigVarMap Config::s_datas;
 }

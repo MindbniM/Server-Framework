@@ -10,7 +10,7 @@
 #include <ctime>
 #include <cstdarg>
 #include "singleton.h"
-#include "config.hpp"
+#include "yaml-cpp/yaml.h"
 namespace MindbniM
 {
 /**
@@ -84,7 +84,7 @@ namespace MindbniM
 /**
  * @brief 获取日志器
  */
-#define LOG_Name(name) LoggerMgr::GetInstance()->getLogger(name)
+#define LOG_NAME(name) LoggerMgr::GetInstance()->getLogger(name)
 
 
     /**
@@ -209,6 +209,9 @@ namespace MindbniM
          * @brief 日志解析方法
          */
         void init();
+
+        std::string getFormat()const{return _format;}
+
         /**
          * @brief 日志内容项格式化
          */
@@ -347,8 +350,12 @@ namespace MindbniM
         LogFormatter::ptr getFormat() const { return _format; }
         void setFormat(LogFormatter::ptr format) { _format = format; }
 
+        virtual std::string getout()=0;
+
         virtual ~LogAppender() {}
 
+        bool FromYaml(const YAML::Node& root);
+        bool ToYaml(YAML::Node& root);
     protected:
         LogLevel::Level _level;
         LogFormatter::ptr _format;
@@ -366,7 +373,9 @@ namespace MindbniM
 
         void addAppender(LogAppender::ptr appender);
         void addAppender(const std::string& out);
+        void addAppender(const std::string& out,const std::string& formatter);
         void addAppender(const std::vector<std::string>& outs);
+        LogAppender::ptr getAppender(const std::string& out);
 
         void delAppender(LogAppender::ptr appender);
 
@@ -377,10 +386,12 @@ namespace MindbniM
 
         std::string getName() const { return _name; }
 
+        bool FromYaml(const YAML::Node& root);
+        bool ToYaml(YAML::Node& root);
     private:
         std::string _name;
         LogLevel::Level _level;
-        std::vector<LogAppender::ptr> _appenders;
+        std::unordered_map<std::string,LogAppender::ptr> _appenders;
     };
 
     /**
@@ -390,8 +401,15 @@ namespace MindbniM
     {
     public:
         LoggerManager();
+        
+        /**
+         * @brief 获取指定日志器, 如果不存在就创建
+         */
         Logger::ptr getLogger(const std::string &name);
         Logger::ptr getRoot();
+
+        bool FromYaml(const YAML::Node& root);
+        bool ToYaml(YAML::Node& root)const ;
 
     private:
         Logger::ptr _root;
@@ -406,6 +424,7 @@ namespace MindbniM
     public:
         using ptr = std::shared_ptr<StdoutAppender>;
         virtual void log(LogEvent::ptr event) override;
+        virtual std::string getout() override;
     };
 
     /**
@@ -419,6 +438,7 @@ namespace MindbniM
         FileoutAppender(const std::string &filename);
         void reopen();
         virtual void log(LogEvent::ptr event) override;
+        virtual std::string getout() override;
 
     private:
         std::string _filename;
@@ -427,44 +447,5 @@ namespace MindbniM
 
     using LoggerMgr=Singleton<LoggerManager>;
 
-
-    template<>
-    class LexicalCast<LoggerManager*,std::string>
-    {
-    public:
-        std::string operator()(const LoggerManager* logs)
-        {
-
-        }
-    };
-    template<>
-    class LexicalCast<std::string,LoggerManager*>
-    {
-    public:
-        LoggerManager* operator()(const std::string& str)
-        {
-            YAML::Node root=YAML::Load(str);
-            for(const auto&node:root)
-            {
-                if(!node["name"].IsDefined())
-                {
-                    throw std::logic_error("log config error: name is null");
-                }
-                std::string name=node["name"].as<std::string>();
-                LogLevel::Level level=LogLevel::Level::DEBUG;
-                if(node["level"])
-                {
-                    level=LogLevel::FromString(node["level"].as<std::string>());
-                }
-                
-
-
-            }
-        }
-    };
-    namespace Configs
-    {
-        ConfigVar<LoggerManager*>::ptr g_logs=Config::Lookup("logs",LoggerMgr::GetInstance());
-    }
 
 }
