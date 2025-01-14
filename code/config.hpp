@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <functional>
 #include <atomic>
+#include <shared_mutex>
 namespace MindbniM
 {
     /**
@@ -358,7 +359,11 @@ namespace MindbniM
         /**
          * @brief 获取配置的值
          */
-        T getVal() const {return _val;}
+        T getVal() const 
+        {
+            std::shared_lock<std::shared_mutex> lock(_mutex);
+            return _val;
+        }
 
         /**
          * @brief 修改配置的值
@@ -371,6 +376,7 @@ namespace MindbniM
             {
                 cb(_val,val);
             }
+            std::unique_lock<std::shared_mutex> lock(_mutex);
             _val=val;
         }
 
@@ -382,6 +388,7 @@ namespace MindbniM
         {
             try
             {
+                std::shared_lock<std::shared_mutex> lock(_mutex);
                 return ToStr()(_val);
             }
             catch (const std::exception &e)
@@ -424,6 +431,7 @@ namespace MindbniM
         {
             static std::atomic<uint64_t> s_id(0);
             s_id++;
+            std::unique_lock<std::shared_mutex> lock(_mutex);
             _cbs[s_id]=cb;
             return s_id;
         }
@@ -433,11 +441,13 @@ namespace MindbniM
          */
         void delCallBack(uint64_t key)
         {
+            std::unique_lock<std::shared_mutex> lock(_mutex);
             _cbs.erase(key);
         }
     private:
         T _val;
         std::map<uint64_t,CallBack> _cbs;
+        std::shared_mutex _mutex;
     };
 
     /**
@@ -455,6 +465,7 @@ namespace MindbniM
          */
         static ConfigVarBase::ptr LookupBase(const std::string& name)
         {
+            std::shared_lock<std::shared_mutex> lock(GetConfigMutex());
             auto it=GetConfigVarMap().find(name);
             if(it==GetConfigVarMap().end())
             {
@@ -468,6 +479,7 @@ namespace MindbniM
         template <class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string &name)
         {
+            std::shared_lock<std::shared_mutex> lock(GetConfigMutex());
             auto it = GetConfigVarMap().find(name);
             if (it == GetConfigVarMap().end())
             {
@@ -490,6 +502,7 @@ namespace MindbniM
         template <class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string &name,const T &val, const std::string &desc = "")
         {
+            std::unique_lock<std::shared_mutex> lock(GetConfigMutex());
             auto it = GetConfigVarMap().find(name);
             if (it != GetConfigVarMap().end())
             {
@@ -577,6 +590,15 @@ namespace MindbniM
             }
         }
 
+        static void Visit(const std::function<void(ConfigVarBase::ptr)>& cb)
+        {
+            std::shared_lock<std::shared_mutex> lock(GetConfigMutex());
+            for(auto&[name,p]:GetConfigVarMap())
+            {
+                cb(p);
+            }
+        }
+
         /**
          * @brief 获取一个全局变量
          * 如果直接类中声明 static ConfigVarMap s_configs并在外定义, 如果这个模板类被多个.cc文件同时包含
@@ -586,6 +608,15 @@ namespace MindbniM
         {
             static ConfigVarMap s_configs;
             return s_configs;
+        }
+
+        /**
+         * @brief 获取读写锁
+         */
+        static std::shared_mutex& GetConfigMutex()
+        {
+            static std::shared_mutex mutex;
+            return mutex;
         }
     };
 }

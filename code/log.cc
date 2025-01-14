@@ -10,7 +10,7 @@ namespace MindbniM
     class LexicalCast<LoggerManager*,std::string>
     {
     public:
-        std::string operator()(const LoggerManager* logs)
+        std::string operator()(LoggerManager* logs)
         {
             YAML::Node root;
             logs->ToYaml(root);
@@ -100,6 +100,7 @@ namespace MindbniM
     }
     bool Logger::ToYaml(YAML::Node& root)
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         YAML::Node node(YAML::NodeType::Map);
         node["name"]=_name;
         node["level"]=LogLevel::ToString(_level);
@@ -117,6 +118,7 @@ namespace MindbniM
 
     void Logger::log(LogEvent::ptr event)
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         if(event->_level>=_level)
         {
             for(auto& [_,i]:_appenders)
@@ -125,18 +127,32 @@ namespace MindbniM
             }
         }
     }
+    LogFormatter::ptr LogAppender::getFormat()
+    {
+        std::unique_lock<Spinlock> lock(_mutex);
+        return _format;
+    }
+    void LogAppender::setFormat(LogFormatter::ptr format)
+    {
+        std::unique_lock<Spinlock> lock(_mutex);
+        _format=format;
+    }
     LogAppender::ptr Logger::getAppender(const std::string& out)
     {
-        auto it=_appenders.find(out);
-        if(it!=_appenders.end())
         {
-            return it->second;
+            std::unique_lock<Spinlock> lock(_mutex);
+            auto it=_appenders.find(out);
+            if(it!=_appenders.end())
+            {
+                return it->second;
+            }
         }
         addAppender(out);
         return _appenders[out];
     }
     void Logger::addAppender(LogAppender::ptr appender)
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         _appenders[appender->getout()]=appender;
     }
     void Logger::addAppender(const std::string& out)
@@ -175,10 +191,12 @@ namespace MindbniM
 
     void Logger::delAppender(LogAppender::ptr appender)
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         _appenders.erase(appender->getout());
     }
     void Logger::clearAppender()
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         _appenders.clear();
     }
     LogEventWrap::~LogEventWrap()
@@ -208,6 +226,7 @@ namespace MindbniM
     }
     bool LoggerManager::FromYaml(const YAML::Node& root)
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         for(const auto&node:root)
         {
             if(!node["name"].IsDefined())
@@ -221,8 +240,9 @@ namespace MindbniM
         }
         return true;
     }
-    bool LoggerManager::ToYaml(YAML::Node& root) const
+    bool LoggerManager::ToYaml(YAML::Node& root) 
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         YAML::Node node(YAML::NodeType::Sequence);
         for(auto&[_,logger]:_loggers)
         {
@@ -244,6 +264,7 @@ namespace MindbniM
         {
             setFormat(std::make_shared<LogFormatter>(root["formatter"].as<std::string>()));
         }
+        std::unique_lock<Spinlock> lock(_mutex);
         if(root["level"].IsDefined())
         {
             _level=LogLevel::FromString(root["level"].as<std::string>());
@@ -252,6 +273,7 @@ namespace MindbniM
     }
     bool LogAppender::ToYaml(YAML::Node& root)
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         YAML::Node node(YAML::NodeType::Map);
         node["formatter"]=_format->getFormat();
         node["level"]=LogLevel::ToString(_level);
@@ -263,6 +285,7 @@ namespace MindbniM
     {
         if(event->_level>=_level)
         {
+            std::unique_lock<Spinlock> lock(_mutex);
             std::cout<<_format->format(event);
         }
     }
@@ -274,6 +297,7 @@ namespace MindbniM
     {}
     void FileoutAppender::reopen()
     {
+        std::unique_lock<Spinlock> lock(_mutex);
         if(_file.is_open())
         {
             _file.close();
@@ -284,6 +308,7 @@ namespace MindbniM
     {
         if(event->_level>=_level)
         {
+            std::unique_lock<Spinlock> lock(_mutex);
             _file<<_format->format(event);
         }
     }

@@ -11,6 +11,8 @@
 #include <cstdarg>
 #include "singleton.h"
 #include "yaml-cpp/yaml.h"
+#include <mutex>
+#include "spinlock.h"
 namespace MindbniM
 {
 /**
@@ -363,12 +365,12 @@ namespace MindbniM
         /**
          * @brief 获取日志格式
          */
-        LogFormatter::ptr getFormat() const { return _format; }
+        LogFormatter::ptr getFormat();
 
         /**
          * @brief 修改日志格式
          */
-        void setFormat(LogFormatter::ptr format) { _format = format; }
+        void setFormat(LogFormatter::ptr format) ;
 
         /**
          * @brief 获取日志输出地的名称
@@ -389,6 +391,7 @@ namespace MindbniM
     protected:
         LogLevel::Level _level;
         LogFormatter::ptr _format;
+        Spinlock _mutex;
     };
 
     /**
@@ -462,6 +465,7 @@ namespace MindbniM
         std::string _name;                                              //日志器名称
         LogLevel::Level _level;                                         //日志最低等级
         std::unordered_map<std::string,LogAppender::ptr> _appenders;    //日志输出地集合
+        Spinlock _mutex;
     };
 
     /**
@@ -490,11 +494,12 @@ namespace MindbniM
         /**
          * @brief 格式化到YAML
          */
-        bool ToYaml(YAML::Node& root)const ;
+        bool ToYaml(YAML::Node& root);
 
     private:
-        Logger::ptr _root;                              //root日志器
-        std::map<std::string, Logger::ptr> _loggers;    //日志器集合
+        Logger::ptr _root;                                          //root日志器
+        std::unordered_map<std::string, Logger::ptr> _loggers;      //日志器集合
+        Spinlock _mutex;
     };
 
     /**
