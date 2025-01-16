@@ -1,6 +1,9 @@
 #pragma once
 #include<iostream>
 #include<coroutine>
+#include<deque>
+#include<queue>
+#include<chrono>
 namespace MindbniM
 { 
     /**
@@ -221,5 +224,37 @@ namespace MindbniM
         }
     
         std::coroutine_handle<promise_type> _coroutine;
+    };
+
+    struct TimeTask
+    {
+        TimeTask(std::chrono::system_clock::time_point time,std::coroutine_handle<> coroutine):_coroutine(coroutine),_time(time)
+        {}
+        bool operator<(const TimeTask& t) const
+        {
+            return _time>t._time;
+        }
+
+        std::coroutine_handle<> _coroutine;
+        std::chrono::system_clock::time_point _time;
+    };
+    class Schedule
+    {
+    public:
+        void push(std::coroutine_handle<> coroutine)
+        {
+            _readyq.push_front(coroutine);
+        }
+        void push(std::chrono::system_clock::time_point time,std::coroutine_handle<> coroutine)
+        {
+            _timeq.emplace(time,coroutine);
+        }
+        void runAll()
+        {
+            
+        }
+    private:
+        std::deque<std::coroutine_handle<>> _readyq;
+        std::priority_queue<TimeTask> _timeq;
     };
 }
