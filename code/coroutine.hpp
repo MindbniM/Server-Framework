@@ -31,7 +31,7 @@ namespace MindbniM
      */
     struct RepeatAwaiter
     {
-        bool await_ready() const {return false;}
+        bool await_ready() const noexcept{return false;}
         std::coroutine_handle<> await_suspend(std::coroutine_handle<> coroutine) const noexcept
         {
             if(coroutine.done())
@@ -55,7 +55,7 @@ namespace MindbniM
         /**
          * @brief 默认创建协程后挂起
          */
-        auto initial_suspend() noexcept
+        auto initial_suspend() 
         {
             return std::suspend_always();
         }
@@ -63,7 +63,7 @@ namespace MindbniM
         /**
          * @brief co_return 调用
          */
-        void return_value(T num) noexcept
+        void return_value(T num) 
         {
             new (&_value) T(std::move(num));
         }
@@ -71,7 +71,7 @@ namespace MindbniM
         /**
          * @brief co_yield 调用
          */
-        auto yield_value(T num) noexcept
+        auto yield_value(T num) 
         {
             new (&_value) T(std::move(num));
             return std::suspend_always();
@@ -133,15 +133,15 @@ namespace MindbniM
         Promise()=default;
         Promise(Promise&&)=delete;
 
-        auto initial_suspend() noexcept
+        auto initial_suspend() 
         {
             return std::suspend_always();
         }
 
-        void return_void() noexcept
+        void return_void() 
         {}
 
-        auto yield_value() noexcept
+        auto yield_value() 
         {
             return std::suspend_always();
         }
@@ -154,7 +154,7 @@ namespace MindbniM
             }
         }
 
-        auto final_suspend() noexcept 
+        auto final_suspend()  
         {
             return PreviousAwaiter(_coroutine);
         }
@@ -181,7 +181,7 @@ namespace MindbniM
     {
         using promise_type = Promise<T>;
     
-        Task(std::coroutine_handle<promise_type> coroutine) noexcept
+        Task(std::coroutine_handle<promise_type> coroutine) 
             : _coroutine(coroutine) {}
     
         Task(Task &&) = delete;
@@ -199,12 +199,12 @@ namespace MindbniM
             Awaiter(std::coroutine_handle<promise_type> coroutine):_coroutine(coroutine)
             {}
 
-            bool await_ready() const noexcept { return false; }
+            bool await_ready() const  { return false; }
     
             /**
              * @brief 保存调用当前的协程的协程句柄, 配合PreviousAwaiter
              */
-            std::coroutine_handle<promise_type> await_suspend(std::coroutine_handle<> coroutine) const noexcept 
+            std::coroutine_handle<promise_type> await_suspend(std::coroutine_handle<> coroutine) const  
             {
                 _coroutine.promise()._coroutine= coroutine;
                 return _coroutine;
@@ -218,7 +218,7 @@ namespace MindbniM
             std::coroutine_handle<promise_type> _coroutine;
         };
     
-        auto operator co_await() const noexcept 
+        auto operator co_await() const  
         {
             return Awaiter(_coroutine);
         }
@@ -233,6 +233,10 @@ namespace MindbniM
         bool operator<(const TimeTask& t) const
         {
             return _time>t._time;
+        }
+        bool timeOut() const
+        {
+            return std::chrono::system_clock::now()>=_time;
         }
 
         std::coroutine_handle<> _coroutine;
@@ -251,10 +255,50 @@ namespace MindbniM
         }
         void runAll()
         {
-            
+            while(1)
+            {
+                while(!_readyq.empty())
+                {
+                    auto task=_readyq.front();
+                    _readyq.pop_front();
+                    std::cout<<"执行任务"<<std::endl;
+                    task.resume();
+                }
+                if(!_timeq.empty())
+                {
+                    const auto& task=_timeq.top();
+                    if(task.timeOut())
+                    {
+                        std::cout<<"添加就绪任务"<<std::endl;
+                        push(task._coroutine);
+                        _timeq.pop();
+                    }
+                }
+            }
         }
+        static Schedule& GetInstance() 
+        {
+            static Schedule s_schedule;
+            return s_schedule;
+        }
+        Schedule& operator=(Schedule&&)=delete;
     private:
         std::deque<std::coroutine_handle<>> _readyq;
         std::priority_queue<TimeTask> _timeq;
+    };
+
+    struct SleepAwaiter
+    {
+        SleepAwaiter(std::chrono::system_clock::duration time):_time(std::chrono::system_clock::now()+time)
+        {
+        }
+        bool await_ready() const {return false;}
+        void await_suspend(std::coroutine_handle<> coroutine) const
+        {
+            Schedule::GetInstance().push(_time,coroutine);
+        }
+        void await_resume()const {}
+
+        std::chrono::system_clock::time_point _time;
     };
 }
