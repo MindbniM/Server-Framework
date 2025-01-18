@@ -20,6 +20,7 @@ namespace MindbniM
                 if(num>_max_count)
                 {
                     std::this_thread::yield();  
+                    num=0;
                 }
             }
         }
