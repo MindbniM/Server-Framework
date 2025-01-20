@@ -8,7 +8,7 @@
 namespace MindbniM
 { 
     /**
-     * @brief 当当前协程结束, 会返回调用当前协程的协程句柄, 恢复到上一层
+     * @brief 当当前协程结束, 会返回调用当前协程的协程句柄, 恢复到上一层, 而不是回到main
      */
     struct PreviousAwaiter
     {
@@ -44,6 +44,7 @@ namespace MindbniM
         void await_resume() const noexcept {}
     };
 
+    static std::atomic<uint64_t> t_fid={0};
     /**
      * @brief 承诺对象
      */
@@ -58,6 +59,7 @@ namespace MindbniM
          */
         auto initial_suspend() 
         {
+            _fid=t_fid++;
             return std::suspend_always();
         }
 
@@ -117,8 +119,18 @@ namespace MindbniM
             return std::coroutine_handle<Promise>::from_promise(*this);
         }
 
+        bool managed_by_schedule() const
+        {
+            return _managed_by_scheduler;
+        }
+        void set_managed_by_schedule() 
+        {
+            _managed_by_scheduler=true;
+        }
+        uint64_t _fid;                          //协程id
         std::coroutine_handle<> _coroutine;     //协程句柄
         std::exception_ptr _excption;           //异常保存
+        bool _managed_by_scheduler= false;      //是否由调度器管理自己协程句柄的生命周期
         union 
         {
             T _value;                           //返回值
@@ -136,6 +148,7 @@ namespace MindbniM
 
         auto initial_suspend() 
         {
+            _fid=t_fid++;
             return std::suspend_always();
         }
 
@@ -170,7 +183,18 @@ namespace MindbniM
             return std::coroutine_handle<Promise>::from_promise(*this);
         }
 
+        bool managed_by_schedule() const
+        {
+            return _managed_by_scheduler;
+        }
+        void set_managed_by_schedule() 
+        {
+            _managed_by_scheduler=true;
+        }
+
+        uint64_t _fid;                          //协程id
         std::coroutine_handle<> _coroutine;     //协程句柄
+        bool _managed_by_scheduler= false;      //是否由调度器管理自己协程句柄的生命周期
         std::exception_ptr _excption;           //异常保存
     };
     
@@ -200,9 +224,13 @@ namespace MindbniM
             _coroutine=t._coroutine;
             t._coroutine=p;
         }
+        std::coroutine_handle get_coroutine() const
+        {
+            return _coroutine;
+        }
         ~Task() 
         {
-            if(_coroutine!=nullptr)
+            if(_coroutine!=nullptr&&!_coroutine.promise().managed_by_schedule())
             _coroutine.destroy();
         }
     
@@ -238,6 +266,7 @@ namespace MindbniM
             return Awaiter(_coroutine);
         }
     
+    private:
         std::coroutine_handle<promise_type> _coroutine=nullptr;
     };
 

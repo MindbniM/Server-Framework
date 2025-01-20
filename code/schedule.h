@@ -6,10 +6,11 @@ namespace  MindbniM
     {
     public:
         using ptr=std::shared_ptr<Schedule>;
-        Schedule(int threads=1,const std::string& name="");
-        void push(std::coroutine_handle<> coroutine,uint64_t thread_id=-1);
+        Schedule(int threads=1,bool use_call=true,const std::string& name="Scheduler");
+        void push(std::coroutine_handle<> coroutine);
         const std::string& getName() const {return _name;}
         static Schedule* GetThis();
+        static void setScheduleCoroutine(std::coroutine_handle<> coroutine);
         void setThis();
         void start();
         void run();
@@ -19,6 +20,7 @@ namespace  MindbniM
     protected:
         std::mutex _mutex;
         int _threadCount;
+        bool _useCall;
         std::vector<Thread::ptr> _threads;
         //就绪调度队列
         std::deque<std::coroutine_handle<>> _readyq;

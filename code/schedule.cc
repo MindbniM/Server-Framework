@@ -2,14 +2,18 @@
 namespace MindbniM
 {
     static thread_local Schedule* t_schedule=nullptr;
-    Schedule::Schedule(int threads,const std::string& name=""):_name(name)
+    static thread_local std::coroutine_handle<> t_coroutine=nullptr;
+    Schedule::Schedule(int threads,bool use_call,const std::string& name):_name(name),_useCall(use_call)
     {
-        threads--;
+        if(use_call)
+        {
+            threads--;
+        }
         t_schedule=this;
         Thread::setName(name);
         _threadCount=threads;
     }
-    void Schedule::push(std::coroutine_handle<> coroutine,uint64_t thread_id=-1)
+    void Schedule::push(std::coroutine_handle<> coroutine)
     {
         std::unique_lock<std::mutex> lock(_mutex);
         _readyq.push_front(coroutine);
@@ -36,6 +40,10 @@ namespace MindbniM
     {
         return t_schedule;
     }
+    void Schedule::setScheduleCoroutine(std::coroutine_handle<> coroutine)
+    {
+        t_coroutine=coroutine;
+    }
     void Schedule::setThis()
     {
         t_schedule=this;
@@ -44,6 +52,7 @@ namespace MindbniM
     {
         auto task=schedule();
         setThis();
+        setScheduleCoroutine(task.get_coroutine());
         task.resume();
     }
 }
