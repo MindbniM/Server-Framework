@@ -5,6 +5,7 @@
 #include<queue>
 #include<chrono>
 #include<memory>
+#include<atomic>
 namespace MindbniM
 { 
     /**
@@ -155,7 +156,7 @@ namespace MindbniM
         void return_void() 
         {}
 
-        auto yield_value() 
+        auto yield_value(int) 
         {
             return std::suspend_always();
         }
@@ -168,7 +169,7 @@ namespace MindbniM
             }
         }
 
-        auto final_suspend()  
+        auto final_suspend() const noexcept
         {
             return PreviousAwaiter(_coroutine);
         }
@@ -224,7 +225,7 @@ namespace MindbniM
             _coroutine=t._coroutine;
             t._coroutine=p;
         }
-        std::coroutine_handle get_coroutine() const
+        std::coroutine_handle<promise_type> get_coroutine() const
         {
             return _coroutine;
         }

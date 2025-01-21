@@ -35,7 +35,7 @@ namespace MindbniM
         {
             g_thread->_name=name;
         }
-        pthread_setname_np(g_thread->_thread,name.substr(0,15).c_str());
+        pthread_setname_np(pthread_self(),name.substr(0,15).c_str());
         g_thread_name=name;
     }
     const std::string& Thread::GetName()

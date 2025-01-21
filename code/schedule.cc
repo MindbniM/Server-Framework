@@ -13,11 +13,6 @@ namespace MindbniM
         Thread::setName(name);
         _threadCount=threads;
     }
-    void Schedule::push(std::coroutine_handle<> coroutine)
-    {
-        std::unique_lock<std::mutex> lock(_mutex);
-        _readyq.push_front(coroutine);
-    }
     void Schedule::start()
     {
         LOG_DEBUG(LOG_ROOT())<<"start";
@@ -35,12 +30,81 @@ namespace MindbniM
     }
     Task<void> Schedule::schedule()
     {
+        auto idleTask=idle();
+        TaskAndF t;
+        while(1)
+        {
+            bool tick=false;
+            {
+                std::unique_lock<std::mutex> lock(_mutex);
+                if(!_readyq.empty())
+                {
+                    t=_readyq.back();
+                    _readyq.pop_back();
+                    tick=!_readyq.empty();
+                }
+            }
+            _activeCount++;
+            if(tick&&_idleCount)
+            {
+                tickle();
+            }
+            if(t._coroutine)
+            {
+                if(!t._coroutine.done())
+                {
+                    t._coroutine.resume();
+                }
+                if(!t._coroutine.done())
+                {
+                    {
+                        std::unique_lock<std::mutex> lock(_mutex);
+                        _readyq.push_front(t);
+                    }
+                }
+                _activeCount--;
+            }
+            else if(t._cb)
+            {
+                if(t._cb)
+                {
+                    t._cb();
+                }
+                _activeCount--;
+            }
+            else 
+            {
+                sleep(1);
+                std::cout<<"idle"<<std::endl;
+                if(!idleTask.get_coroutine().done())
+                {
+                    _idleCount++;
+                    co_await idleTask;
+                    _idleCount--;
+                }
+                else break;
+            }
+            t.clear();
+        }
+    }
+    Task<void> Schedule::idle()
+    {
+        while(stopping())
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            co_yield 0;
+        }
+    }
+    bool Schedule::stopping()
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _stop&&_activeCount==0&&_readyq.empty();
     }
     Schedule* Schedule::GetThis()
     {
         return t_schedule;
     }
-    void Schedule::setScheduleCoroutine(std::coroutine_handle<> coroutine)
+    void Schedule::setScheduleCoroutine(Fiber coroutine)
     {
         t_coroutine=coroutine;
     }
@@ -48,11 +112,41 @@ namespace MindbniM
     {
         t_schedule=this;
     }
+    void Schedule::stop()
+    {
+        if(stopping())
+        {
+            return;
+        }
+        _stop=true;
+        tickle();
+        if(_useCall)
+        {
+            auto t=schedule();
+            t.resume();
+        }
+        for(auto& i:_threads)
+        {
+            i->join();
+        }
+
+    }
     void Schedule::run()
     {
         auto task=schedule();
         setThis();
         setScheduleCoroutine(task.get_coroutine());
         task.resume();
+    }
+    Schedule::~Schedule()
+    {
+        if(GetThis()==this)
+        {
+            t_schedule=nullptr;
+        }
+    }
+    void Schedule::tickle()
+    {
+
     }
 }
