@@ -106,7 +106,7 @@ namespace  MindbniM
         /**
          * @brief 调度器是否停止
          */
-        bool stopping();
+        virtual bool stopping();
         Schedule& operator=(Schedule&&)=delete;
         virtual ~Schedule();
     protected:
@@ -124,7 +124,7 @@ namespace  MindbniM
         /**
          * @brief idle协程
          */
-        Task<void> idle();
+        virtual Task<void> idle();
     protected:
         std::mutex _mutex;                      //互斥锁
         int _threadCount;                       //线程数量

@@ -26,6 +26,7 @@ namespace MindbniM
         * @exception std::logic_error 当线程创建失败时抛出异常
         */
         template<class Fn,class ...Args>
+        requires std::invocable<Fn,Args...>
         explicit Thread(const std::string& name,Fn&& f,Args&&...args):_name(name),_sem(0)
         {
             _cb=std::bind(std::forward<Fn>(f), std::forward<Args>(args)...);
