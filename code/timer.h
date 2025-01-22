@@ -1,10 +1,6 @@
 #pragma once
-#include<set>
-#include<functional>
-#include<memory>
+#include"log.h"
 #include<chrono>
-#include<atomic>
-#include<mutex>
 #include<shared_mutex>
 namespace MindbniM
 {
@@ -13,14 +9,15 @@ namespace MindbniM
     {
         using ptr=std::shared_ptr<Timer>;
 
-        Timer(std::chrono::system_clock::duration ms,std::function<void()> cb,bool recurring,TimerManager* manager);
+        Timer(std::chrono::milliseconds ms,std::function<void()> cb,bool recurring,TimerManager* manager);
         bool cancel();
         bool refresh();
-
+        void clear();
+        bool reset(std::chrono::milliseconds ms,bool from_now);
         bool _recurring;
         uint64_t _id;
-        std::chrono::system_clock::duration _ms;
-        std::chrono::system_clock::time_point _timeOut;
+        std::chrono::milliseconds _ms;
+        std::chrono::steady_clock::time_point _timeOut;
         std::function<void()> _cb;
         TimerManager* _manager=nullptr;
     };
@@ -38,11 +35,14 @@ namespace MindbniM
     class TimerManager
     {
     public:
-        TimerManager();
-        bool addTimer(std::chrono::system_clock::duration ms,std::function<void()> cb,bool recurring=false);
+        Timer::ptr addTimer(std::chrono::system_clock::duration ms,std::function<void()> cb,bool recurring=false);
+        void addTimer(Timer::ptr timer);
+        bool erase(Timer::ptr timer);
         static void onTimer(std::function<void()> cb,std::weak_ptr<void> weak_cond);
         uint64_t getNextTimer();
-        bool addConditionTimer(std::chrono::system_clock::duration ms,std::function<void()> cb,std::weak_ptr<void> weak_cond,bool recurring=false);
+        bool count(Timer::ptr);
+        void listcb(std::vector<std::function<void()>>& cbs);
+        Timer::ptr addConditionTimer(std::chrono::system_clock::duration ms,std::function<void()> cb,std::weak_ptr<void> weak_cond,bool recurring=false);
         virtual void onTimerInsertedAtFront() = 0;
 
     protected:
