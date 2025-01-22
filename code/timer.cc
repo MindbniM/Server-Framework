@@ -13,9 +13,10 @@ namespace MindbniM
         if(_manager==nullptr)
         {
             LOG_WARNING(LOG_NAME("system"))<<"this Timer is not in manager";
-            return ;
+            return false;
         }
         _manager->erase(shared_from_this());
+        return true;
     }
     bool Timer::refresh()
     {
@@ -31,6 +32,7 @@ namespace MindbniM
         _manager->erase(shared_from_this());
         _timeOut=std::chrono::steady_clock::now()+_ms;
         _manager->addTimer(shared_from_this());
+        return true;
     }
     bool Timer::reset(std::chrono::milliseconds ms,bool from_now)
     {
@@ -53,13 +55,14 @@ namespace MindbniM
         _manager->erase(shared_from_this());
         _timeOut+=dur;
         _manager->addTimer(shared_from_this());
+        return true;
     }
     void Timer::clear()
     {
         _manager=nullptr;
         _cb=nullptr;
     }
-    Timer::ptr TimerManager::addTimer(std::chrono::system_clock::duration ms, std::function<void()> cb, bool recurring = false)
+    Timer::ptr TimerManager::addTimer(std::chrono::milliseconds ms, std::function<void()> cb, bool recurring )
     {
         bool need=false;
         Timer::ptr p=std::make_shared<Timer>(ms,cb,recurring,this);
@@ -111,7 +114,7 @@ namespace MindbniM
             cb();
         }
     }
-    Timer::ptr TimerManager::addConditionTimer(std::chrono::system_clock::duration ms, std::function<void()> cb, std::weak_ptr<void> weak_cond, bool recurring = false)
+    Timer::ptr TimerManager::addConditionTimer(std::chrono::milliseconds ms, std::function<void()> cb, std::weak_ptr<void> weak_cond, bool recurring )
     {
         return addTimer(ms,std::bind(&TimerManager::onTimer,cb,weak_cond),recurring);
     }

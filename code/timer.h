@@ -35,14 +35,14 @@ namespace MindbniM
     class TimerManager
     {
     public:
-        Timer::ptr addTimer(std::chrono::system_clock::duration ms,std::function<void()> cb,bool recurring=false);
+        Timer::ptr addTimer(std::chrono::milliseconds ms,std::function<void()> cb,bool recurring=false);
         void addTimer(Timer::ptr timer);
         bool erase(Timer::ptr timer);
         static void onTimer(std::function<void()> cb,std::weak_ptr<void> weak_cond);
         uint64_t getNextTimer();
         bool count(Timer::ptr);
         void listcb(std::vector<std::function<void()>>& cbs);
-        Timer::ptr addConditionTimer(std::chrono::system_clock::duration ms,std::function<void()> cb,std::weak_ptr<void> weak_cond,bool recurring=false);
+        Timer::ptr addConditionTimer(std::chrono::milliseconds ms,std::function<void()> cb,std::weak_ptr<void> weak_cond,bool recurring=false);
         virtual void onTimerInsertedAtFront() = 0;
 
     protected:
