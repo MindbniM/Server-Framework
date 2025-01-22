@@ -2,6 +2,8 @@
 #include"log.h"
 #include<chrono>
 #include<shared_mutex>
+#include<unistd.h>
+#include"util.h"
 namespace MindbniM
 {
     class TimerManager;
@@ -119,5 +121,27 @@ namespace MindbniM
     protected:
         std::shared_mutex _mutex;                   //读写锁
         std::set<Timer::ptr,__TimeComp__> _timers;  //任务集合
+    };
+
+    /**
+     * @brief 联动epoll
+     */
+    class TimerFd : public TimerManager
+    {
+    public:
+        TimerFd();
+
+        /**
+         * @brief 返回读fd
+         */
+        int fd() const {return _readfd;}
+
+        /**
+         * @brief 写数据触发epoll
+         */
+        virtual void onTimerInsertedAtFront() override;
+    private:
+        int _readfd;
+        int _writefd;
     };
 }

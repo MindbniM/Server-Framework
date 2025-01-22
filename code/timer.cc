@@ -134,26 +134,45 @@ namespace MindbniM
     {
         std::chrono::steady_clock::time_point now=std::chrono::steady_clock::now();
         cbs.clear();
-        std::unique_lock<std::shared_mutex> lock(_mutex);
-        auto it=_timers.begin();
-        while(it!=_timers.end())
+        std::vector<Timer::ptr> temp;
         {
-            if((*it)->_timeOut>now)
+            std::unique_lock<std::shared_mutex> lock(_mutex);
+            auto it=_timers.begin();
+            while(it!=_timers.end())
             {
-                break;
+                if((*it)->_timeOut>now)
+                {
+                    break;
+                }
+                Timer::ptr p=*it;
+                _timers.erase(it++);
+                cbs.push_back(p->_cb);
+                if(p->_recurring)
+                {
+                    p->_timeOut=now+p->_ms;
+                    temp.push_back(p);
+                }
+                else
+                {
+                    p->clear();
+                }
             }
-            Timer::ptr p=*it;
-            _timers.erase(it);
-            cbs.push_back(p->_cb);
-            if(p->_recurring)
-            {
-                p->_timeOut=now+p->_ms;
-                _timers.insert(p);
-            }
-            else
-            {
-                p->clear();
-            }
+            _timers.insert(temp.begin(),temp.end());
         }
+
+    }
+    TimerFd::TimerFd()
+    {
+        int p[2];
+        int n=pipe(p);
+        ASSERT(n<0,"system",strerror(errno))
+        _readfd=p[0];
+        _writefd=p[1];
+    }
+    void TimerFd::onTimerInsertedAtFront()
+    {
+        int n=write(_writefd,"T",1);
+        ASSERT(n<0,"system",strerror(errno))
+        ASSERT(n!=1,"root","?")
     }
 }
