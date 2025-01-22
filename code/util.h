@@ -1,10 +1,14 @@
 #pragma once
 #include<string>
 #include <cxxabi.h>
+#include <exception>
 namespace MindbniM
 {
     namespace Util
     {
+        #define ASSERT(x,logger,message) if(x) {LOG_ERROR(LOG_NAME(logger)) << "ASSERTION: " #x ; throw std::logic_error(message);}
+
+
         /**
          * @brief 将类型名转换为人可以读的简易名称
          */
