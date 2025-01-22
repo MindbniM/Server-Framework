@@ -62,6 +62,13 @@ namespace MindbniM
                         _readyq.push_front(t);
                     }
                 }
+                else
+                {
+                    if(t._coroutine.promise().managed_by_schedule()) 
+                    {
+                        t._coroutine.destroy();
+                    }
+                }
                 _activeCount--;
             }
             else if(t._cb)

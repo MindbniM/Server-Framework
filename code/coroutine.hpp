@@ -46,6 +46,7 @@ namespace MindbniM
     };
 
     static std::atomic<uint64_t> t_fid={0};
+
     /**
      * @brief 承诺对象
      */
@@ -119,15 +120,23 @@ namespace MindbniM
         {
             return std::coroutine_handle<Promise>::from_promise(*this);
         }
-
+        
+        /**
+         * @brief 是否将协程句柄的生命周期交给调度器
+         */
         bool managed_by_schedule() const
         {
             return _managed_by_scheduler;
         }
+
+        /**
+         * @brief 将协程句柄的生命周期交给调度器
+         */
         void set_managed_by_schedule() 
         {
             _managed_by_scheduler=true;
         }
+
         uint64_t _fid;                          //协程id
         std::coroutine_handle<> _coroutine;     //协程句柄
         std::exception_ptr _excption;           //异常保存
@@ -214,6 +223,9 @@ namespace MindbniM
     
         Task(Task &&) = delete;
 
+        /**
+         * @brief 恢复当前协程
+         */
         void resume()
         {
             _coroutine.resume();
@@ -225,10 +237,18 @@ namespace MindbniM
             _coroutine=t._coroutine;
             t._coroutine=p;
         }
+        
+        /**
+         * @brief 获取协程句柄
+         */
         std::coroutine_handle<promise_type> get_coroutine() const
         {
             return _coroutine;
         }
+        
+        /**
+         * @brief 如果管理协程句柄的生命周期就销毁
+         */
         ~Task() 
         {
             if(_coroutine!=nullptr&&!_coroutine.promise().managed_by_schedule())
@@ -271,20 +291,4 @@ namespace MindbniM
         std::coroutine_handle<promise_type> _coroutine=nullptr;
     };
 
-    struct TimeTask
-    {
-        TimeTask(std::chrono::system_clock::time_point time,std::coroutine_handle<> coroutine):_coroutine(coroutine),_time(time)
-        {}
-        bool operator<(const TimeTask& t) const
-        {
-            return _time>t._time;
-        }
-        bool timeOut() const
-        {
-            return std::chrono::system_clock::now()>=_time;
-        }
-
-        std::coroutine_handle<> _coroutine;
-        std::chrono::system_clock::time_point _time;
-    };
 }
