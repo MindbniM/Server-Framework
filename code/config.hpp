@@ -339,6 +339,7 @@ namespace MindbniM
      *          ToStr   从T转换到string的仿函数
      */
     template <class T, class FromStr = LexicalCast<std::string, T>, class ToStr = LexicalCast<T, std::string>>
+    requires std::invocable<FromStr>&&std::invocable<ToStr>
     class ConfigVar : public ConfigVarBase
     {
     public:
