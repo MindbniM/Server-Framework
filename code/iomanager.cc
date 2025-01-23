@@ -1,0 +1,176 @@
+#include "iomanager.h"
+namespace MindbniM
+{
+
+    EventContext &FdContext::getContext(Event ev)
+    {
+        switch (ev)
+        {
+        case Event::READ:
+            return _read;
+        case Event::WRITE:
+            return _write;
+        default:
+        {
+            LOG_WARNING(LOG_NAME("system")) << "unknow event";
+            throw std::invalid_argument("unknow event");
+        }
+        }
+    }
+    void FdContext::clear()
+    {
+        _read.clear();
+        _write.clear();
+        _event=Event::NONE;
+        if(_fd>0) ::close(_fd);
+    }
+    void FdContext::triggerEvent(Event event)
+    {
+        EventContext& ev=getContext(event);
+        if(ev._task._cb)
+        {
+            ev._root->push(ev._task._cb);
+        }
+        if(ev._task._coroutine)
+        {
+            ev._root->push(ev._task._coroutine);
+        }
+        clear();
+
+    }
+    FdContext::FdContext(int fd,Event event):_fd(fd),_event(event)
+    {}
+    FdContext::~FdContext()
+    {
+        clear();
+    }
+    IoManager::IoManager(int threads=1,bool use_call=true,const std::string& name="Scheduler")
+        :Schedule(threads,use_call,name)
+    {
+        Util::setFdNoBlock(_tfd.fd());
+        _epoll.addEvent(_tfd.fd(),EPOLLIN|EPOLLET);
+        //加入到集合?
+        start();
+    }
+    IoManager::~IoManager()
+    {
+        stop();
+    }
+    IoManager* IoManager::GetThis()
+    {
+        return dynamic_cast<IoManager*>(Schedule::GetThis());
+    }
+    bool IoManager::delEvent(int fd,Event event)
+    {
+        FdContext::ptr p=nullptr;
+        std::shared_lock<std::shared_mutex> rlock(_mutex);
+        if(!_fdcontexts.count(fd)) return false;
+        p=_fdcontexts[fd];
+        rlock.unlock();
+        if(!(p->_event&event))  return false;
+        Event nevent=(Event)((p->_event)&(~event));
+        int op=nevent?EPOLL_CTL_MOD:EPOLL_CTL_DEL;
+        _epoll.ctlEvent(fd,EPOLLET|event|EPOLLEXCLUSIVE,op);
+        --_pendingEventCount;
+        p->_event=nevent;
+        p->getContext(event).clear();
+    }
+    bool IoManager::cencelEvent(int fd,Event event)
+    {
+        FdContext::ptr p=nullptr;
+        std::shared_lock<std::shared_mutex> rlock(_mutex);
+        if(!_fdcontexts.count(fd)) return false;
+        p=_fdcontexts[fd];
+        rlock.unlock();
+        if(!(p->_event&event))  return false;
+        Event nevent=(Event)((p->_event)&(~event));
+        int op=nevent?EPOLL_CTL_MOD:EPOLL_CTL_DEL;
+        _epoll.ctlEvent(fd,EPOLLET|event|EPOLLEXCLUSIVE,op);
+        --_pendingEventCount;
+        p->triggerEvent(event);
+    }
+    bool IoManager::cencelAll(int fd)
+    {
+        FdContext::ptr p=nullptr;
+        std::shared_lock<std::shared_mutex> rlock(_mutex);
+        if(!_fdcontexts.count(fd)) return false;
+        p=_fdcontexts[fd];
+        rlock.unlock();
+        if(!p->_event) return false;
+        _epoll.delEvent(fd);
+        if(p->_event&READ)
+        {
+            p->triggerEvent(READ);
+            --_pendingEventCount;
+        }
+        if(p->_event&WRITE)
+        {
+            p->triggerEvent(WRITE);
+            --_pendingEventCount;
+        }
+        return true;
+    }
+    void IoManager::tickle()
+    {
+        _tfd.tickle();
+    }
+    bool IoManager::stopping()
+    {
+        uint64_t timeout=_tfd.getNextTimer();
+        return timeout==UINT64_MAX&&_pendingEventCount==0&&Schedule::stopping();
+    }
+    Task<void> IoManager::idle()
+    {
+        std::vector<epoll_event> events;
+        while(1)
+        {
+            LOG_DEBUG(LOG_ROOT())<<"IoManager::idle thread is"<<Thread::GetName();
+            if(stopping())
+            {
+                LOG_DEBUG(LOG_ROOT())<<"IoManager is exits"<<Thread::GetName();
+                break;
+            }
+            int n=0;
+            while(1)
+            {
+                static uint64_t MaxTimeOut=5000;
+                uint64_t next=_tfd.getNextTimer();
+                next=std::min(next,MaxTimeOut);
+                n=_epoll.wait(events,next);
+                if(n<0&&errno==EINTR)
+                {
+                    continue;
+                }
+                else 
+                {
+                    break;
+                }
+            }
+            std::vector<std::function<void()>> cbs;
+            _tfd.listcb(cbs);
+            for(auto& cb:cbs)
+            {
+                push(cb);
+            }
+            cbs.clear();
+            for(int i=0;i<n;i++)
+            {
+                epoll_event& ev=events[i];
+                if(ev.data.fd==_tfd.fd())
+                {
+                    char temp[256];
+                    while(read(_tfd.fd(),temp,sizeof(temp))>0);
+                    continue;
+                }
+                std::shared_lock<std::shared_mutex> rlock(_mutex);
+                FdContext::ptr p=_fdcontexts[ev.data.fd];
+                rlock.unlock();
+                if(ev.events&(EPOLLERR|EPOLLHUP))
+                {
+                    ev.events|=(EPOLLIN|EPOLLOUT)&p->_event;
+                }
+            }
+
+        }
+    }
+}
