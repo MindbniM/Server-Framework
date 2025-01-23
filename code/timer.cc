@@ -71,9 +71,9 @@ namespace MindbniM
             const auto &[it, _] = _timers.insert(p);
             need=it==_timers.begin();
         }
-        if(need)
+        if(need&&_onTimerInsertedAtFront)
         {
-            onTimerInsertedAtFront();
+            _onTimerInsertedAtFront();
         }
         return p;
     }
@@ -85,9 +85,9 @@ namespace MindbniM
             const auto &[it, _] = _timers.insert(timer);
             need=it==_timers.begin();
         }
-        if(need)
+        if(need&&_onTimerInsertedAtFront)
         {
-            onTimerInsertedAtFront();
+            _onTimerInsertedAtFront();
         }
     }
     bool TimerManager::count(Timer::ptr timer)
@@ -165,14 +165,19 @@ namespace MindbniM
     {
         int p[2];
         int n=pipe(p);
-        ASSERT(n<0,"system",strerror(errno))
+        ASSERT(n<0,"system",strerror(errno),std::runtime_error)
         _readfd=p[0];
         _writefd=p[1];
+        _onTimerInsertedAtFront=[this]
+        {
+            int n=write(_writefd,"T",1);
+            ASSERT(n<0,"system",strerror(errno),std::runtime_error)
+            ASSERT(n!=1,"root","?",std::runtime_error)
+        };
     }
-    void TimerFd::onTimerInsertedAtFront()
+    void TimerFd::tickle()
     {
-        int n=write(_writefd,"T",1);
-        ASSERT(n<0,"system",strerror(errno))
-        ASSERT(n!=1,"root","?")
+        if(_onTimerInsertedAtFront)
+        _onTimerInsertedAtFront();
     }
 }

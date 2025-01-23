@@ -113,14 +113,13 @@ namespace MindbniM
          */
         Timer::ptr addConditionTimer(std::chrono::milliseconds ms,std::function<void()> cb,std::weak_ptr<void> weak_cond,bool recurring=false);
 
-        /**
-         * @brief 当一个被插入的任务是最小的, 应该对某些关注最短时间的进行调整
-         */
-        virtual void onTimerInsertedAtFront() = 0;
-
     protected:
-        std::shared_mutex _mutex;                   //读写锁
-        std::set<Timer::ptr,__TimeComp__> _timers;  //任务集合
+        std::shared_mutex _mutex;                       //读写锁
+        std::set<Timer::ptr,__TimeComp__> _timers;      //任务集合
+        /**
+         * @brief 当一个被插入的任务是最小的, 可能需要对某些关注最短时间的进行调整
+         */
+        std::function<void()> _onTimerInsertedAtFront;
     };
 
     /**
@@ -136,10 +135,8 @@ namespace MindbniM
          */
         int fd() const {return _readfd;}
 
-        /**
-         * @brief 写数据触发epoll
-         */
-        virtual void onTimerInsertedAtFront() override;
+        void tickle();
+
     private:
         int _readfd;
         int _writefd;
