@@ -72,7 +72,7 @@ namespace MindbniM
          * @return 返回转换类型后的值
          * @exception boost库会在类型不能转换时抛出异常
          */
-        V operator()(const T& t)
+        V operator()(const T& t) const
         {
             return boost::lexical_cast<V>(t);
         }
@@ -86,7 +86,7 @@ namespace MindbniM
     class LexicalCast<std::string,std::vector<T>>
     {
     public:
-        std::vector<T> operator()(const std::string& str)
+        std::vector<T> operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             std::vector<T> ret;
@@ -108,7 +108,7 @@ namespace MindbniM
     class LexicalCast<std::vector<T>,std::string>
     {
     public:
-        std::string operator()(const std::vector<T>& vec)
+        std::string operator()(const std::vector<T>& vec) const
         {
             YAML::Node root(YAML::NodeType::Sequence);
             for(auto& i:vec)
@@ -128,7 +128,7 @@ namespace MindbniM
     class LexicalCast<std::string,std::list<T>>
     {
     public:
-        std::list<T> operator()(const std::string& str)
+        std::list<T> operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             std::list<T> ret;
@@ -150,7 +150,7 @@ namespace MindbniM
     class LexicalCast<std::list<T>,std::string>
     {
     public:
-        std::string operator()(const std::list<T>& list)
+        std::string operator()(const std::list<T>& list) const
         {
             YAML::Node root(YAML::NodeType::Sequence);
             for(auto& i:list)
@@ -170,7 +170,7 @@ namespace MindbniM
     class LexicalCast<std::string,std::unordered_set<T>>
     {
     public:
-        std::unordered_set<T> operator()(const std::string& str)
+        std::unordered_set<T> operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             std::unordered_set<T> ret;
@@ -192,7 +192,7 @@ namespace MindbniM
     class LexicalCast<std::unordered_set<T>,std::string>
     {
     public:
-        std::string operator()(const std::unordered_set<T>& uset)
+        std::string operator()(const std::unordered_set<T>& uset) const
         {
             YAML::Node root(YAML::NodeType::Sequence);
             for(auto& i:uset)
@@ -212,7 +212,7 @@ namespace MindbniM
     class LexicalCast<std::string,std::set<T>>
     {
     public:
-        std::set<T> operator()(const std::string& str)
+        std::set<T> operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             std::set<T> ret;
@@ -234,7 +234,7 @@ namespace MindbniM
     class LexicalCast<std::set<T>,std::string>
     {
     public:
-        std::string operator()(const std::set<T>& set)
+        std::string operator()(const std::set<T>& set) const
         {
             YAML::Node root(YAML::NodeType::Sequence);
             for(auto& i:set)
@@ -254,7 +254,7 @@ namespace MindbniM
     class LexicalCast<std::string,std::unordered_map<std::string,T>>
     {
     public:
-        std::unordered_map<std::string,T> operator()(const std::string& str)
+        std::unordered_map<std::string,T> operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             std::unordered_map<std::string,T> ret;
@@ -276,7 +276,7 @@ namespace MindbniM
     class LexicalCast<std::unordered_map<std::string,T>,std::string>
     {
     public:
-        std::string operator()(const std::unordered_map<std::string,T>& umap)
+        std::string operator()(const std::unordered_map<std::string,T>& umap) const
         {
             YAML::Node root(YAML::NodeType::Map);
             for(auto& [x,y]:umap)
@@ -296,7 +296,7 @@ namespace MindbniM
     class LexicalCast<std::string,std::map<std::string,T>>
     {
     public:
-        std::map<std::string,T> operator()(const std::string& str)
+        std::map<std::string,T> operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             std::map<std::string,T> ret;
@@ -318,7 +318,7 @@ namespace MindbniM
     class LexicalCast<std::map<std::string,T>,std::string>
     {
     public:
-        std::string operator()(const std::map<std::string,T>& umap)
+        std::string operator()(const std::map<std::string,T>& umap) const
         {
             YAML::Node root(YAML::NodeType::Map);
             for(auto& [x,y]:umap)
@@ -339,7 +339,7 @@ namespace MindbniM
      *          ToStr   从T转换到string的仿函数
      */
     template <class T, class FromStr = LexicalCast<std::string, T>, class ToStr = LexicalCast<T, std::string>>
-    requires std::invocable<FromStr>&&std::invocable<ToStr>
+    requires std::invocable<FromStr,const std::string&>&&std::invocable<ToStr,T>
     class ConfigVar : public ConfigVarBase
     {
     public:

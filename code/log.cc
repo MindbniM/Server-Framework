@@ -10,7 +10,7 @@ namespace MindbniM
     class LexicalCast<LoggerManager*,std::string>
     {
     public:
-        std::string operator()(LoggerManager* logs)
+        std::string operator()(LoggerManager* logs) const
         {
             YAML::Node root;
             logs->ToYaml(root);
@@ -28,7 +28,7 @@ namespace MindbniM
     class LexicalCast<std::string,LoggerManager*>
     {
     public:
-        LoggerManager* operator()(const std::string& str)
+        LoggerManager* operator()(const std::string& str) const
         {
             YAML::Node root=YAML::Load(str);
             LoggerManager* LogMer=LoggerMgr::GetInstance();
