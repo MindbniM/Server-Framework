@@ -82,7 +82,7 @@ namespace MindbniM
             else 
             {
                 sleep(1);
-                std::cout<<"idle"<<std::endl;
+                //std::cout<<"idle"<<std::endl;
                 if(!idleTask.get_coroutine().done())
                 {
                     _idleCount++;

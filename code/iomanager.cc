@@ -22,7 +22,6 @@ namespace MindbniM
         _read.clear();
         _write.clear();
         _event=Event::NONE;
-        if(_fd>0) ::close(_fd);
     }
     void FdContext::triggerEvent(Event event)
     {
@@ -35,16 +34,18 @@ namespace MindbniM
         {
             ev._root->push(ev._task._coroutine);
         }
-        clear();
-
     }
     FdContext::FdContext(int fd,Event event):_fd(fd),_event(event)
     {}
     FdContext::~FdContext()
     {
         clear();
+        if(_fd>0) 
+        {
+            ::close(_fd);
+        }
     }
-    IoManager::IoManager(int threads=1,bool use_call=true,const std::string& name="Scheduler")
+    IoManager::IoManager(int threads,bool use_call,const std::string& name)
         :Schedule(threads,use_call,name)
     {
         Util::setFdNoBlock(_tfd.fd());
@@ -70,10 +71,11 @@ namespace MindbniM
         if(!(p->_event&event))  return false;
         Event nevent=(Event)((p->_event)&(~event));
         int op=nevent?EPOLL_CTL_MOD:EPOLL_CTL_DEL;
-        _epoll.ctlEvent(fd,EPOLLET|event|EPOLLEXCLUSIVE,op);
+        _epoll.ctlEvent(fd,EPOLLET|(int)event|EPOLLEXCLUSIVE,op);
         --_pendingEventCount;
         p->_event=nevent;
         p->getContext(event).clear();
+        return true;
     }
     bool IoManager::cencelEvent(int fd,Event event)
     {
@@ -85,9 +87,10 @@ namespace MindbniM
         if(!(p->_event&event))  return false;
         Event nevent=(Event)((p->_event)&(~event));
         int op=nevent?EPOLL_CTL_MOD:EPOLL_CTL_DEL;
-        _epoll.ctlEvent(fd,EPOLLET|event|EPOLLEXCLUSIVE,op);
+        _epoll.ctlEvent(fd,EPOLLET|(int)event|EPOLLEXCLUSIVE,op);
         --_pendingEventCount;
         p->triggerEvent(event);
+        return true;
     }
     bool IoManager::cencelAll(int fd)
     {
@@ -121,6 +124,7 @@ namespace MindbniM
     }
     Task<void> IoManager::idle()
     {
+        //std::cout<<"idle to epoll_wait"<<std::endl;
         std::vector<epoll_event> events;
         while(1)
         {
@@ -148,11 +152,11 @@ namespace MindbniM
             }
             std::vector<std::function<void()>> cbs;
             _tfd.listcb(cbs);
-            for(auto& cb:cbs)
+            if(!cbs.empty())
             {
-                push(cb);
+                push(cbs.begin(),cbs.end());
+                cbs.clear();
             }
-            cbs.clear();
             for(int i=0;i<n;i++)
             {
                 epoll_event& ev=events[i];
@@ -169,8 +173,34 @@ namespace MindbniM
                 {
                     ev.events|=(EPOLLIN|EPOLLOUT)&p->_event;
                 }
+                int revent=0;
+                if(ev.events&EPOLLIN)
+                {
+                    revent|=READ;
+                }
+                if(ev.events&EPOLLOUT)
+                {
+                    revent|=WRITE;
+                }
+                if((p->_event&revent)==NONE)
+                {
+                    continue;
+                }
+                int mevent=p->_event&(~revent);
+                int op=mevent? EPOLL_CTL_MOD:EPOLL_CTL_DEL;
+                _epoll.ctlEvent(ev.data.fd,mevent|EPOLLET|EPOLLEXCLUSIVE,op);
+                if(mevent&READ)
+                {
+                    p->triggerEvent(READ);
+                    --_pendingEventCount;
+                }
+                if(mevent&WRITE)
+                {
+                    p->triggerEvent(WRITE);
+                    --_pendingEventCount;
+                }
             }
-
+            co_yield 0;
         }
     }
 }

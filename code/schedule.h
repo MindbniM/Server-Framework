@@ -57,13 +57,31 @@ namespace  MindbniM
         {
             bool tick=false;
             {
-                std::unique_lock<std::mutex> lock(_mutex);
                 TaskAndF t(task);
+                std::unique_lock<std::mutex> lock(_mutex);
                 if(t._cb||t._coroutine)
                 {
                     tick=_readyq.empty();
                     _readyq.push_front(t);
                 }
+            }
+            if(tick) tickle();
+        }
+
+        template<class InputIterator>
+        void push(InputIterator first,InputIterator last)
+        {
+            bool tick=false;
+            {
+                std::vector<TaskAndF> t;
+                while(first!=last)
+                {
+                    if(*first)
+                    t.emplace_back(*first);
+                }
+                std::unique_lock<std::mutex> lock(_mutex);
+                tick=_readyq.empty();
+                _readyq.insert(_readyq.begin(),t.begin(),t.end());
             }
             if(tick) tickle();
         }
