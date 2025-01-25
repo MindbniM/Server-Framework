@@ -44,23 +44,16 @@ namespace MindbniM
                     tick=!_readyq.empty();
                 }
             }
-            _activeCount++;
             if(tick&&_idleCount)
             {
                 tickle();
             }
             if(t._coroutine)
             {
+                _activeCount++;
                 if(!t._coroutine.done())
                 {
                     t._coroutine.resume();
-                }
-                if(!t._coroutine.done())
-                {
-                    {
-                        std::unique_lock<std::mutex> lock(_mutex);
-                        _readyq.push_front(t);
-                    }
                 }
                 else
                 {
@@ -73,6 +66,7 @@ namespace MindbniM
             }
             else if(t._cb)
             {
+                _activeCount++;
                 if(t._cb)
                 {
                     t._cb();
@@ -81,15 +75,16 @@ namespace MindbniM
             }
             else 
             {
-                sleep(1);
-                //std::cout<<"idle"<<std::endl;
                 if(!idleTask.get_coroutine().done())
                 {
                     _idleCount++;
-                    co_await idleTask;
+                    idleTask.resume();
                     _idleCount--;
                 }
-                else break;
+                else
+                {
+                    co_return;
+                } 
             }
             t.clear();
         }

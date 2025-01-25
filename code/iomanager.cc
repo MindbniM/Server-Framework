@@ -125,14 +125,15 @@ namespace MindbniM
     Task<void> IoManager::idle()
     {
         //std::cout<<"idle to epoll_wait"<<std::endl;
+        LOG_DEBUG(LOG_ROOT())<<"idle wait";
         std::vector<epoll_event> events;
         while(1)
         {
-            LOG_DEBUG(LOG_ROOT())<<"IoManager::idle thread is"<<Thread::GetName();
+            LOG_DEBUG(LOG_ROOT())<<"IoManager::idle thread is "<<Thread::GetName();
             if(stopping())
             {
                 LOG_DEBUG(LOG_ROOT())<<"IoManager is exits"<<Thread::GetName();
-                break;
+                co_return;
             }
             int n=0;
             while(1)

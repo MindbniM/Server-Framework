@@ -123,6 +123,8 @@ namespace MindbniM
          * @brief 获取当前的调度器
          */
         static IoManager* GetThis();
+
+        TimerFd& getTimerManager() {return _tfd;}
     private:
         Epoll _epoll;                                       //epoll句柄
         std::shared_mutex _mutex;                           //读写锁

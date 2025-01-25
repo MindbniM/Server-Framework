@@ -78,6 +78,7 @@ namespace  MindbniM
                 {
                     if(*first)
                     t.emplace_back(*first);
+                    first++;
                 }
                 std::unique_lock<std::mutex> lock(_mutex);
                 tick=_readyq.empty();
@@ -156,21 +157,4 @@ namespace  MindbniM
     };
 
 
-    /**
-     * @brief 此等待体是为了当协程休眠时自动加入定时任务... 未完善
-     */
-    struct SleepAwaiter
-    {
-        SleepAwaiter(std::chrono::system_clock::duration time):_time(std::chrono::system_clock::now()+time)
-        {
-        }
-        bool await_ready() const {return false;}
-        void await_suspend(std::coroutine_handle<> coroutine) const
-        {
-            //Schedule::GetInstance().push(_time,coroutine);
-        }
-        void await_resume()const {}
-
-        std::chrono::system_clock::time_point _time;
-    };
 }
