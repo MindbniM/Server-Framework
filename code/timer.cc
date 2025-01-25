@@ -69,7 +69,7 @@ namespace MindbniM
         {
             std::unique_lock<std::shared_mutex> lock(_mutex);
             const auto &[it, _] = _timers.insert(p);
-            need=it==_timers.begin();
+            need=(it==_timers.begin());
         }
         if(need&&_onTimerInsertedAtFront)
         {
