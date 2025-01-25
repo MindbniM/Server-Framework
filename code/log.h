@@ -81,12 +81,12 @@ namespace MindbniM
 /**
  * @brief 获取主日志器
  */
-#define LOG_ROOT() LoggerMgr::GetInstance()->getRoot()
+#define LOG_ROOT() MindbniM::LoggerMgr::GetInstance()->getRoot()
 
 /**
  * @brief 获取日志器
  */
-#define LOG_NAME(name) LoggerMgr::GetInstance()->getLogger(name)
+#define LOG_NAME(name) MindbniM::LoggerMgr::GetInstance()->getLogger(name)
 
 
     /**
