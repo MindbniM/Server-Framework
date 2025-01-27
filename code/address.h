@@ -6,6 +6,9 @@
 #include<sys/un.h>
 #include<memory>
 #include<sstream>
+#include<netdb.h>
+#include"log.h"
+#include"util.h"
 namespace MindbniM
 {
     class Address
@@ -16,8 +19,13 @@ namespace MindbniM
         int getFamily() const;
         virtual const sockaddr* getAddr() const =0;
         virtual socklen_t getAddrLen() const =0;
-        virtual std::ostream& insert(std::ostream& os) const;
+        virtual std::ostream& insert(std::ostream& os) const=0;
         std::string toString();
+        static Address::ptr Address::Create(const sockaddr *addr, socklen_t addrlen);
+        static bool Address::Lookup(std::vector<Address::ptr>& result, const std::string& host, int family=AF_UNSPEC, int type=0, int protocol=0);
+        static Address::ptr Address::LookupAny(const std::string &host, int family=AF_INET, int type=0, int protocol=0);
+        static bool GetInterfaceAddresses(std::vector<std::pair<Address::ptr, uint32_t> >&result ,const std::string& iface, int family = AF_INET);
+
 
         bool operator<(const Address& addr) const;
         bool operator==(const Address& addr) const;
@@ -28,20 +36,24 @@ namespace MindbniM
     {
     public:
         using ptr=std::shared_ptr<IPAddress>;
+        static IPAddress::ptr Create(const char* address, uint16_t port);
 
         virtual IPAddress::ptr broadcastAddress(uint32_t addr) const =0;
         virtual IPAddress::ptr networkAddress(uint32_t addr) const =0;
         virtual IPAddress::ptr subnetMask(uint32_t addr) const =0;
 
         virtual uint16_t getPort() const =0;
-        virtual void setPort(uint16_t port) const =0;
+        virtual void setPort(uint16_t port) =0;
     };
     class IPv4Address :public IPAddress
     {
     public:
         using ptr=std::shared_ptr<IPv4Address>;
 
-        IPv4Address(uint32_t address=INADDR_ANY,uint16_t port=0);
+        IPv4Address()=default;
+        IPv4Address(uint32_t address,uint16_t port=0);
+        IPv4Address(const sockaddr_in& addr);
+        static IPv4Address::ptr Create(const char* address, uint16_t port = 0);
 
         virtual const sockaddr* getAddr() const override;
         virtual socklen_t getAddrLen() const override;
@@ -52,7 +64,7 @@ namespace MindbniM
         virtual IPAddress::ptr subnetMask(uint32_t addr) const override;
 
         virtual uint16_t getPort() const override;
-        virtual void setPort(uint16_t port) const override;
+        virtual void setPort(uint16_t port)  override;
     private:
         sockaddr_in _addr={0};
     };
@@ -61,7 +73,10 @@ namespace MindbniM
     public:
         using ptr=std::shared_ptr<IPv6Address>;
 
-        IPv6Address(uint32_t address=INADDR_ANY,uint16_t port=0);
+        IPv6Address()=default;
+        IPv6Address(const sockaddr_in6& addr);
+        IPv6Address(const char* address,uint16_t port=0);
+        IPv6Address::ptr Create(const char* address, uint16_t port);
 
         virtual const sockaddr* getAddr() const override;
         virtual socklen_t getAddrLen() const override;
@@ -72,7 +87,7 @@ namespace MindbniM
         virtual IPAddress::ptr subnetMask(uint32_t addr) const override;
 
         virtual uint16_t getPort() const override;
-        virtual void setPort(uint16_t port) const override;
+        virtual void setPort(uint16_t port)  override;
     private:
         sockaddr_in6 _addr={0};
     };
@@ -81,6 +96,7 @@ namespace MindbniM
     public:
         using ptr=std::shared_ptr<UnixAddress>;
 
+        UnixAddress();
         UnixAddress(const std::string& path);
 
         virtual const sockaddr* getAddr() const override;
@@ -91,13 +107,15 @@ namespace MindbniM
         socklen_t _len=0;
     };
 
-    class UnknowAddress : public Address
+    class UnknownAddress : public Address
     {
     public:
-        using ptr=std::shared_ptr<UnknowAddress>;
+        using ptr=std::shared_ptr<UnknownAddress>;
 
-        UnknowAddress(int family);
+        UnknownAddress(int family);
+        UnknownAddress::UnknownAddress(const sockaddr &addr);
 
+        sockaddr *UnknownAddress::getAddr();
         virtual const sockaddr* getAddr() const override;
         virtual socklen_t getAddrLen() const override;
         virtual std::ostream& insert(std::ostream& os) const override;
