@@ -60,12 +60,20 @@ namespace MindbniM
     public:
         using ptr=std::shared_ptr<TcpSocket>;
 
-        TcpSocket();
+        TcpSocket(int family);
         bool bind(Address::ptr addr);
         TcpSocket::ptr connect(Address::ptr peer);
         TcpSocket::ptr accept();
+        bool listen(int backlog=SOMAXCONN);
+        ssize_t send(const std::string& message,int flags,int& err);
+        ssize_t recv(std::string& message,int flags,int& err);
+        bool isConnect() const {return _isConnect;}
+        bool isBind() const {return _isBind;}
     private:
-        TcpSocket(int sock);
+        TcpSocket(int sock,bool isConnect);
+    private:
+        bool _isConnect=false;
+        bool _isBind=false;
 
     };
     class UdpSocket : public Socket
