@@ -69,13 +69,21 @@ namespace MindbniM
         ssize_t recv(std::string& message,int flags,int& err);
         bool isConnect() const {return _isConnect;}
         bool isBind() const {return _isBind;}
+        bool isClose() const {return _isClose;}
+        bool close();
+        std::ostream& _to_string(std::ostream &os) const;
+        const std::string& to_string() const;
+        friend std::ostream& operator<<(std::ostream& os, const Socket& sock);
+
     private:
         TcpSocket(int sock,bool isConnect);
     private:
         bool _isConnect=false;
         bool _isBind=false;
+        bool _isClose=false;
 
     };
+
     class UdpSocket : public Socket
     {
     public:

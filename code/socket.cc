@@ -85,19 +85,19 @@ namespace MindbniM
         }
         return true;
     }
-    ssize_t TcpSocket::send(const std::string &message, int flags,int& err)
+    ssize_t TcpSocket::send(const std::string &message, int flags, int &err)
     {
         if (!_isConnect)
         {
             return -1;
         }
-        size_t totalSent = 0; 
+        size_t totalSent = 0;
         size_t messageSize = message.size();
         const char *data = message.c_str();
 
         while (totalSent < messageSize)
         {
-            err=0;
+            err = 0;
             ssize_t n = ::send(_sock, data + totalSent, messageSize - totalSent, flags);
 
             if (n > 0)
@@ -107,7 +107,7 @@ namespace MindbniM
             }
             else if (n == -1)
             {
-                err=errno;
+                err = errno;
                 if (errno == EINTR)
                 {
                     // 系统调用被中断，重试
@@ -116,17 +116,17 @@ namespace MindbniM
                 else if (errno == EAGAIN || errno == EWOULDBLOCK)
                 {
                     // 非阻塞模式下缓冲区已满，暂时无法发送
-                    return totalSent; 
+                    return totalSent;
                 }
                 else
                 {
-                    LOG_ERROR(LOG_ROOT())<<"send error";
+                    LOG_ERROR(LOG_ROOT()) << "send error";
                     return -1;
                 }
             }
         }
 
-        return totalSent; 
+        return totalSent;
     }
 
     ssize_t TcpSocket::recv(std::string &message, int flags, int &err)
@@ -168,6 +168,37 @@ namespace MindbniM
             }
         }
         return -1;
+    }
+    bool TcpSocket::close()
+    {
+        if (_isClose || _sock < 0)
+            return false;
+        ::close(_sock);
+        _isClose = true;
+        return true;
+    }
+    std::ostream &TcpSocket::_to_string(std::ostream &os) const
+    {
+        os << "[Socket sock=" << _sock
+           << " is_connected=" << _isConnect
+           << " family=" << _family
+           << " type=" << _type;
+        if (_localAddr)
+        {
+            os << " local_address=" << _localAddr->toString();
+        }
+        os << "]";
+        return os;
+    }
+    const std::string &TcpSocket::to_string() const
+    {
+        std::stringstream ss;
+        _to_string(ss);
+        return ss.str();
+    }
+    std::ostream &operator<<(std::ostream &os, const TcpSocket &sock)
+    {
+        return sock._to_string(os);
     }
 
 }
