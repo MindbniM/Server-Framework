@@ -4,7 +4,7 @@
 namespace  MindbniM
 {
     template<class F>
-    concept TaskType=std::same_as<F, std::function<void()>> || std::same_as<F, std::coroutine_handle<Task<void>::promise_type>>;
+    concept TaskType=std::same_as<F, std::function<void()> > || std::same_as<F, std::coroutine_handle<Task<void>::promise_type>>;
 
 
 
@@ -46,7 +46,7 @@ namespace  MindbniM
          * @param[in] use_call 是否将主线程参与调度
          * @param[in] name 调度器名
          */
-        Schedule(int threads=1,bool use_call=true,const std::string& name="Scheduler");
+        Schedule(int threads=1,bool use_call=true,const std::string& name="Scheduler",bool auto_close=true);
 
         /**
          * @brief 加入任务
@@ -128,6 +128,8 @@ namespace  MindbniM
         virtual bool stopping();
         Schedule& operator=(Schedule&&)=delete;
         virtual ~Schedule();
+        bool isAutoClose() const {return _autoClose;}
+        void setAutoClose(bool flag) {_autoClose=flag;}
     protected:
 
         /**
@@ -148,6 +150,7 @@ namespace  MindbniM
         std::mutex _mutex;                      //互斥锁
         int _threadCount;                       //线程数量
         bool _useCall;                          //main线程是否参与调度
+        bool _autoClose;                        //是否自动关闭
         std::vector<Thread::ptr> _threads;      //线程池
         std::deque<TaskAndF> _readyq;           //调度队列
         bool _stop=false;                       //是否停止调度器

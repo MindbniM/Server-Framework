@@ -1,5 +1,6 @@
 #pragma once
 #include"address.h"
+#include"buffer.h"
 #include<netinet/tcp.h>
 namespace MindbniM
 {
@@ -37,6 +38,7 @@ namespace MindbniM
         };
 
         Socket(int type,int family);
+        ~Socket(){}
         bool newSock();
         int getType() const {return _type;}
         int getFamily() const {return _family;}
@@ -61,19 +63,22 @@ namespace MindbniM
         using ptr=std::shared_ptr<TcpSocket>;
 
         TcpSocket(int family);
+        ~TcpSocket();
         bool bind(Address::ptr addr);
         TcpSocket::ptr connect(Address::ptr peer);
         TcpSocket::ptr accept();
         bool listen(int backlog=SOMAXCONN);
         ssize_t send(const std::string& message,int flags,int& err);
         ssize_t recv(std::string& message,int flags,int& err);
+        ssize_t send(Buffer& message,int flags,int& err);
+        ssize_t recv(Buffer& message,int flags,int& err);
         bool isConnect() const {return _isConnect;}
         bool isBind() const {return _isBind;}
         bool isClose() const {return _isClose;}
         bool close();
         std::ostream& _to_string(std::ostream &os) const;
-        const std::string& to_string() const;
-        friend std::ostream& operator<<(std::ostream& os, const Socket& sock);
+        std::string to_string() const;
+        friend std::ostream& operator<<(std::ostream& os, const TcpSocket& sock);
 
     private:
         TcpSocket(int sock,bool isConnect);

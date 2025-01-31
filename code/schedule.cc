@@ -3,14 +3,15 @@ namespace MindbniM
 {
     static thread_local Schedule* t_schedule=nullptr;
     static thread_local std::coroutine_handle<> t_coroutine=nullptr;
-    Schedule::Schedule(int threads,bool use_call,const std::string& name):_name(name),_useCall(use_call)
+    Schedule::Schedule(int threads,bool use_call,const std::string& name,bool auto_close):_name(name),_useCall(use_call),_autoClose(auto_close)
     {
         if(use_call)
         {
             threads--;
+            Thread::setName(name);
         }
+        else
         t_schedule=this;
-        Thread::setName(name);
         _threadCount=threads;
     }
     void Schedule::start()
@@ -100,7 +101,7 @@ namespace MindbniM
     bool Schedule::stopping()
     {
         std::unique_lock<std::mutex> lock(_mutex);
-        return _stop&&_activeCount==0&&_readyq.empty();
+        return _stop&&_activeCount==0&&_readyq.empty()&&_autoClose;
     }
     Schedule* Schedule::GetThis()
     {
@@ -126,12 +127,11 @@ namespace MindbniM
         {
             auto t=schedule();
             t.resume();
+            for(auto& i:_threads)
+            {
+                i->join();
+            }
         }
-        for(auto& i:_threads)
-        {
-            i->join();
-        }
-
     }
     void Schedule::run()
     {

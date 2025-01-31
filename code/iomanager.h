@@ -67,14 +67,23 @@ namespace MindbniM
     {
     public:
         /**
-         * @brief 给schedule传参
+         * @brief 构造方法
+         * @param[in] threads 工作线程数
+         * @param[in] use_call main线程是否参与调度
+         * @param[in] name 调度器名称
+         * @param[in] auto_close 是否自动关闭
          */
-        IoManager(int threads=1,bool use_call=true,const std::string& name="Scheduler");
+        IoManager(int threads=1,bool use_call=true,const std::string& name="Scheduler",bool auto_close=true);
         
         /**
          * @brief 调用stop停止调度器
          */
         ~IoManager();
+
+        /**
+         * @brief 扩容
+         */
+        void contextResize(size_t size);
 
         /**
          * @brief 新增一个文件描述符事件
@@ -125,20 +134,22 @@ namespace MindbniM
         static IoManager* GetThis();
 
         TimerFd& getTimerManager() {return _tfd;}
+
     private:
         Epoll _epoll;                                       //epoll句柄
         std::shared_mutex _mutex;                           //读写锁
         std::atomic<int> _pendingEventCount={0};            //当前等待执行的任务数量
-        std::unordered_map<int, FdContext::ptr> _fdcontexts;//Fd事件储存
+        std::vector<FdContext::ptr> _fdcontexts;            //Fd事件储存
         TimerFd _tfd;                                       //定时器
     };
 
     template<TaskType F>
     bool IoManager::addEvent(int fd,Event event,F cb)
     {
+        //LOG_DEBUG(LOG_ROOT())<<_name;
         FdContext::ptr p=nullptr;
         std::shared_lock<std::shared_mutex> rlock(_mutex);
-        if(_fdcontexts.count(fd))
+        if((int)_fdcontexts.size()>fd)
         {
             p=_fdcontexts[fd];
             rlock.unlock();
@@ -147,7 +158,8 @@ namespace MindbniM
         {
             rlock.unlock();
             std::unique_lock<std::shared_mutex> wlock(_mutex);
-            p=_fdcontexts[fd]=std::make_shared<FdContext>(fd,event);
+            contextResize(fd * 1.5);
+            p=_fdcontexts[fd];
         }
         if(p->_event&event)
         {
@@ -156,7 +168,9 @@ namespace MindbniM
         int op=p->_event? EPOLL_CTL_MOD:EPOLL_CTL_ADD;
         _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event|EPOLLEXCLUSIVE,op);
         _pendingEventCount++;
-        p->_event|=event;
+        int _ev_=p->_event;
+        _ev_|=(int)event;
+        p->_event=(Event)_ev_;
         EventContext& ev=p->getContext(event);
         ev._root=Schedule::GetThis();
         ev._task=TaskAndF(cb);

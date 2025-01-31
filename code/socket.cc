@@ -43,6 +43,7 @@ namespace MindbniM
             LOG_ERROR(LOG_ROOT()) << "socket bind error : " << strerror(errno);
             return false;
         }
+        _localAddr=addr;
         _isBind = true;
         return true;
     }
@@ -60,7 +61,7 @@ namespace MindbniM
     {
         sockaddr_in6 peer = {0};
         socklen_t len = sizeof(peer);
-        int n = ::accept(_sock, (sockaddr *)&peer, &len);
+        int n = ::accept4(_sock, (sockaddr *)&peer, &len,SOCK_NONBLOCK);
         if (n < 0)
         {
             LOG_ERROR(LOG_ROOT()) << "socket accept error : " << strerror(errno);
@@ -161,7 +162,7 @@ namespace MindbniM
                 }
                 else
                 {
-                    perror("recv error");
+                    LOG_ERROR(LOG_ROOT())<<"recv error";
                     _isConnect = false;
                     return -1;
                 }
@@ -169,10 +170,15 @@ namespace MindbniM
         }
         return -1;
     }
+    TcpSocket::~TcpSocket()
+    {
+        close();
+    }
     bool TcpSocket::close()
     {
         if (_isClose || _sock < 0)
             return false;
+        LOG_DEBUG(LOG_ROOT())<<to_string()<<" is Close";
         ::close(_sock);
         _isClose = true;
         return true;
@@ -190,11 +196,20 @@ namespace MindbniM
         os << "]";
         return os;
     }
-    const std::string &TcpSocket::to_string() const
+    std::string TcpSocket::to_string() const
     {
         std::stringstream ss;
         _to_string(ss);
         return ss.str();
+    }
+    ssize_t TcpSocket::send(Buffer& message,int flags,int& err)
+    {
+        if(!_isConnect) return -1;
+        return message.Send(_sock,flags,&err);
+    }
+    ssize_t TcpSocket::recv(Buffer& message,int flags,int& err)
+    {
+        return message.Recv(_sock,flags,&err);
     }
     std::ostream &operator<<(std::ostream &os, const TcpSocket &sock)
     {
