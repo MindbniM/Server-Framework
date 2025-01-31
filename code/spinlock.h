@@ -25,6 +25,7 @@ namespace MindbniM
         void lock() 
         {
             int num=0;
+            //测试并设置标志位，返回之前的值
             while (_flag.test_and_set(std::memory_order_acquire)) 
             {
                 num++;
@@ -52,7 +53,7 @@ namespace MindbniM
             return !_flag.test_and_set(std::memory_order_acquire);
         }
     private:
-        int _max_count=100;                         //最大自选次数
+        int _max_count;                         //最大自选次数
         std::atomic_flag _flag=ATOMIC_FLAG_INIT;    //原子标志
     };
 }

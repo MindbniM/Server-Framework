@@ -25,6 +25,18 @@ namespace MindbniM
             _thread = 0;
         }
     }
+    void Thread::detach()
+    {
+        if(_thread)
+        {
+            int n=pthread_detach(_thread);
+            if(n) 
+            {
+                LOG_ERROR(LOG_NAME("system")) << "pthread_join thread error: " << n << " name=" << _name;
+                throw std::logic_error("pthread_join error");
+            }
+        }
+    }
     Thread* Thread::getThis()
     {
         return g_thread;

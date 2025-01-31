@@ -62,6 +62,11 @@ namespace MindbniM
         void join();
 
         /**
+         * @brief 分离线程
+         */
+        void detach();
+
+        /**
          * @brief 析构执行线程分离
          */
         ~Thread();
