@@ -41,7 +41,6 @@ namespace MindbniM
     }
     void Buffer::Retrieve_All()
     {
-        std::fill(_buffer.begin(), _buffer.end(), 0);
         _wPos = 0;
         _rPos = 0;
     }
@@ -106,5 +105,82 @@ namespace MindbniM
         }
         _rPos += n;
         return n;
+    }
+    ssize_t Buffer::Send(int sock,int flags, int *Errno)
+    {
+        size_t totalSent = 0;
+        size_t messageSize = Read_ableBytes();
+        const char *data = Peek();
+
+        while (totalSent < messageSize)
+        {
+            *Errno = 0;
+            ssize_t n = ::send(sock, data + totalSent, messageSize - totalSent, flags|MSG_NOSIGNAL);
+
+            if (n > 0)
+            {
+                // 正常发送，累加已发送字节数
+                totalSent += n;
+                _rPos+=n;
+            }
+            else if (n == -1)
+            {
+                *Errno = errno;
+                if (errno == EINTR)
+                {
+                    // 系统调用被中断
+                    return totalSent;
+                }
+                else if (errno == EAGAIN || errno == EWOULDBLOCK)
+                {
+                    // 非阻塞模式下缓冲区已满，暂时无法发送
+                    return totalSent;
+                }
+                else
+                {
+                    LOG_ERROR(LOG_ROOT()) << "send error : "<<strerror(errno);
+                    return -1;
+                }
+            }
+        }
+        return totalSent;
+    }
+    ssize_t Buffer::Recv(int sock,int flags, int *Errno)
+    {
+        *Errno = 0;
+        ssize_t totalSent=0;
+        while(1)
+        {
+            ssize_t n = ::recv(sock, Begin_Write(),Write_ableBytes(), flags);
+            if (n > 0)
+            {
+                _wPos+=n;
+                totalSent+=n;
+            }
+            else if (n == 0)
+            {
+                //对端关闭连接
+                return 0;
+            }
+            else
+            {
+                *Errno = errno;
+                if (errno == EINTR)
+                {
+                    continue;
+                }
+                // 非阻塞模式，无数据可读
+                else if (errno == EWOULDBLOCK || errno == EAGAIN)
+                {
+                    return totalSent;
+                }
+                else
+                {
+                    LOG_ERROR(LOG_ROOT()) << "recv error : "<<strerror(errno);
+                    return -1;
+                }
+            }
+        }
+        return -1;
     }
 }

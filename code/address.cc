@@ -1,6 +1,16 @@
 #include "address.h"
 namespace MindbniM
 {
+    template<class T>
+    static uint32_t CountBytes(T n)
+    {
+        uint32_t ret=0;
+        for(;n;ret++)
+        {
+            n&=n-1;
+        }
+        return ret;
+    }
     int Address::getFamily() const
     {
         return getAddr()->sa_family;
@@ -114,7 +124,7 @@ namespace MindbniM
     }
     bool Address::GetInterfaceAddresses(std::vector<std::pair<Address::ptr, uint32_t> >&result ,const std::string& iface, int family )
     {
-        
+
     }
     Address::ptr Address::Create(const sockaddr *addr, socklen_t addrlen)
     {
@@ -326,7 +336,7 @@ namespace MindbniM
         _addr = addr;
     }
 
-    sockaddr *UnknownAddress::getAddr()
+    const sockaddr *UnknownAddress::getAddr()
     {
         return (sockaddr *)&_addr;
     }

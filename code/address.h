@@ -21,9 +21,9 @@ namespace MindbniM
         virtual socklen_t getAddrLen() const =0;
         virtual std::ostream& insert(std::ostream& os) const=0;
         std::string toString();
-        static Address::ptr Address::Create(const sockaddr *addr, socklen_t addrlen);
-        static bool Address::Lookup(std::vector<Address::ptr>& result, const std::string& host, int family=AF_UNSPEC, int type=0, int protocol=0);
-        static Address::ptr Address::LookupAny(const std::string &host, int family=AF_INET, int type=0, int protocol=0);
+        static Address::ptr Create(const sockaddr *addr, socklen_t addrlen);
+        static bool Lookup(std::vector<Address::ptr>& result, const std::string& host, int family=AF_UNSPEC, int type=0, int protocol=0);
+        static Address::ptr LookupAny(const std::string &host, int family=AF_INET, int type=0, int protocol=0);
         static bool GetInterfaceAddresses(std::vector<std::pair<Address::ptr, uint32_t> >&result ,const std::string& iface, int family = AF_INET);
 
 
@@ -113,9 +113,9 @@ namespace MindbniM
         using ptr=std::shared_ptr<UnknownAddress>;
 
         UnknownAddress(int family);
-        UnknownAddress::UnknownAddress(const sockaddr &addr);
+        UnknownAddress(const sockaddr &addr);
 
-        sockaddr *UnknownAddress::getAddr();
+        const sockaddr *getAddr();
         virtual const sockaddr* getAddr() const override;
         virtual socklen_t getAddrLen() const override;
         virtual std::ostream& insert(std::ostream& os) const override;

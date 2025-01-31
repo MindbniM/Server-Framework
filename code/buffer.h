@@ -7,6 +7,8 @@
 #include <vector>
 #include <atomic>
 #include <assert.h>
+#include <sys/socket.h>
+#include "log.h"
 
 namespace MindbniM
 {
@@ -73,6 +75,9 @@ namespace MindbniM
 
         // 将缓冲区的数据写入到文件描述符 `fd`
         ssize_t WriteFd(int fd, int *Errno);
+
+        ssize_t Send(int sock,int flags, int *Errno);
+        ssize_t Recv(int sock,int flags, int *Errno);
 
     private:
         // 返回缓冲区起始位置的非const版本指针
