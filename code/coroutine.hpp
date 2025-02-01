@@ -1,42 +1,49 @@
 #pragma once
-#include<iostream>
-#include<coroutine>
-#include<deque>
-#include<queue>
-#include<chrono>
-#include<memory>
-#include<atomic>
+#include <iostream>
+#include <coroutine>
+#include <deque>
+#include <queue>
+#include <chrono>
+#include <memory>
+#include <atomic>
 namespace MindbniM
-{ 
+{
     /**
      * @brief 当当前协程结束, 会返回调用当前协程的协程句柄, 恢复到上一层, 而不是回到main
      */
     struct PreviousAwaiter
     {
-        PreviousAwaiter(std::coroutine_handle<> prev):_prev(prev)
-        {}
+        PreviousAwaiter(std::coroutine_handle<> prev) : _prev(prev)
+        {
+        }
 
-        bool await_ready()const noexcept {return false;;}
+        bool await_ready() const noexcept
+        {
+            return false;
+            ;
+        }
 
         std::coroutine_handle<> await_suspend(std::coroutine_handle<> coroutine) const noexcept
         {
-            if(_prev)   return _prev;
-            else return std::noop_coroutine();
+            if (_prev)
+                return _prev;
+            else
+                return std::noop_coroutine();
         }
         void await_resume() const noexcept {}
 
         std::coroutine_handle<> _prev;
     };
-    
+
     /**
      * @brief 如果协程没有执行完, 就继续执行
      */
     struct RepeatAwaiter
     {
-        bool await_ready() const noexcept{return false;}
+        bool await_ready() const noexcept { return false; }
         std::coroutine_handle<> await_suspend(std::coroutine_handle<> coroutine) const noexcept
         {
-            if(coroutine.done())
+            if (coroutine.done())
             {
                 return std::noop_coroutine();
             }
@@ -45,30 +52,36 @@ namespace MindbniM
         void await_resume() const noexcept {}
     };
 
-    static std::atomic<uint64_t> t_fid={0};
+    static std::atomic<uint64_t> t_fid = {0};
 
+    enum class Yield
+    {
+        NORMAL,
+        TIMER_WAIT,
+        IO_WAIT
+    };
     /**
      * @brief 承诺对象
      */
-    template<class T>
-    struct Promise 
+    template <class T>
+    struct Promise
     {
-        Promise()=default;
-        Promise(Promise&&)=delete;
+        Promise() = default;
+        Promise(Promise &&) = delete;
 
         /**
          * @brief 默认创建协程后挂起
          */
-        auto initial_suspend() 
+        auto initial_suspend()
         {
-            _fid=t_fid++;
+            _fid = t_fid++;
             return std::suspend_always();
         }
 
         /**
          * @brief co_return 调用
          */
-        void return_value(T num) 
+        void return_value(T num)
         {
             new (&_value) T(std::move(num));
         }
@@ -76,7 +89,7 @@ namespace MindbniM
         /**
          * @brief co_yield 调用
          */
-        auto yield_value(T num) 
+        auto yield_value(T num)
         {
             new (&_value) T(std::move(num));
             return std::suspend_always();
@@ -87,11 +100,11 @@ namespace MindbniM
          */
         T result()
         {
-            if(_excption)
+            if (_excption)
             {
                 std::rethrow_exception(_excption);
             }
-            T ret=std::move(_value);
+            T ret = std::move(_value);
             _value.~T();
             return ret;
         }
@@ -99,28 +112,28 @@ namespace MindbniM
         /**
          * @brief 协程结束调用
          */
-        auto final_suspend() noexcept 
+        auto final_suspend() noexcept
         {
             return PreviousAwaiter(_coroutine);
         }
 
         /**
-         * @brief 保存协程异常 
+         * @brief 保存协程异常
          * 协程抛异常会调用这个
          */
-        void unhandled_exception() 
+        void unhandled_exception()
         {
-            _excption=std::current_exception();
+            _excption = std::current_exception();
         }
 
         /**
          * @brief 生成协程返回对象
          */
-        std::coroutine_handle<Promise> get_return_object() 
+        std::coroutine_handle<Promise> get_return_object()
         {
             return std::coroutine_handle<Promise>::from_promise(*this);
         }
-        
+
         /**
          * @brief 是否将协程句柄的生命周期交给调度器
          */
@@ -132,47 +145,48 @@ namespace MindbniM
         /**
          * @brief 将协程句柄的生命周期交给调度器
          */
-        void set_managed_by_schedule() 
+        void set_managed_by_schedule()
         {
-            _managed_by_scheduler=true;
+            _managed_by_scheduler = true;
         }
 
-        uint64_t _fid;                          //协程id
-        std::coroutine_handle<> _coroutine;     //协程句柄
-        std::exception_ptr _excption;           //异常保存
-        bool _managed_by_scheduler= false;      //是否由调度器管理自己协程句柄的生命周期
-        union 
+        uint64_t _fid;                      // 协程id
+        std::coroutine_handle<> _coroutine; // 协程句柄
+        std::exception_ptr _excption;       // 异常保存
+        bool _managed_by_scheduler = false; // 是否由调度器管理自己协程句柄的生命周期
+        union
         {
-            T _value;                           //返回值
+            T _value; // 返回值
         };
     };
 
     /**
      * @brief 特化void
      */
-    template<>
+    template <>
     struct Promise<void>
     {
-        Promise()=default;
-        Promise(Promise&&)=delete;
+        Promise() = default;
+        Promise(Promise &&) = delete;
 
-        auto initial_suspend() 
+        auto initial_suspend()
         {
-            _fid=t_fid++;
+            _fid = t_fid++;
             return std::suspend_always();
         }
 
-        void return_void() 
-        {}
+        void return_void()
+        {
+        }
 
-        auto yield_value(int) 
+        auto yield_value(int)
         {
             return std::suspend_always();
         }
 
         void result()
         {
-            if(_excption)
+            if (_excption)
             {
                 std::rethrow_exception(_excption);
             }
@@ -183,12 +197,12 @@ namespace MindbniM
             return PreviousAwaiter(_coroutine);
         }
 
-        void unhandled_exception() 
+        void unhandled_exception()
         {
-            _excption=std::current_exception();
+            _excption = std::current_exception();
         }
 
-        std::coroutine_handle<Promise> get_return_object() 
+        std::coroutine_handle<Promise> get_return_object()
         {
             return std::coroutine_handle<Promise>::from_promise(*this);
         }
@@ -197,17 +211,17 @@ namespace MindbniM
         {
             return _managed_by_scheduler;
         }
-        void set_managed_by_schedule() 
+        void set_managed_by_schedule()
         {
-            _managed_by_scheduler=true;
+            _managed_by_scheduler = true;
         }
 
-        uint64_t _fid;                          //协程id
-        std::coroutine_handle<> _coroutine;     //协程句柄
-        bool _managed_by_scheduler= false;      //是否由调度器管理自己协程句柄的生命周期
-        std::exception_ptr _excption;           //异常保存
+        uint64_t _fid;                      // 协程id
+        std::coroutine_handle<> _coroutine; // 协程句柄
+        bool _managed_by_scheduler = false; // 是否由调度器管理自己协程句柄的生命周期
+        std::exception_ptr _excption;       // 异常保存
     };
-    
+
     /**
      * @brief 协程任务
      */
@@ -215,12 +229,12 @@ namespace MindbniM
     struct Task
     {
         using promise_type = Promise<T>;
-        using ptr=std::shared_ptr<Task<T>>;
-    
-        Task()=default;
-        Task(std::coroutine_handle<promise_type> coroutine) 
+        using ptr = std::shared_ptr<Task<T>>;
+
+        Task() = default;
+        Task(std::coroutine_handle<promise_type> coroutine)
             : _coroutine(coroutine) {}
-    
+
         Task(Task &&) = delete;
 
         /**
@@ -230,14 +244,14 @@ namespace MindbniM
         {
             _coroutine.resume();
         }
-    
-        void swap(Task<T>& t)
+
+        void swap(Task<T> &t)
         {
-            std::coroutine_handle<> p=_coroutine;
-            _coroutine=t._coroutine;
-            t._coroutine=p;
+            std::coroutine_handle<> p = _coroutine;
+            _coroutine = t._coroutine;
+            t._coroutine = p;
         }
-        
+
         /**
          * @brief 获取协程句柄
          */
@@ -245,50 +259,51 @@ namespace MindbniM
         {
             return _coroutine;
         }
-        
+
         /**
          * @brief 如果管理协程句柄的生命周期就销毁
          */
-        ~Task() 
+        ~Task()
         {
-            if(_coroutine!=nullptr&&!_coroutine.promise().managed_by_schedule())
-            _coroutine.destroy();
+            if (_coroutine != nullptr && !_coroutine.promise().managed_by_schedule())
+                _coroutine.destroy();
         }
-    
+
         /**
          * @brief 调用 co_await Task会执行下面
          */
-        struct Awaiter 
+        struct Awaiter
         {
-            Awaiter(std::coroutine_handle<promise_type> coroutine):_coroutine(coroutine)
-            {}
+            Awaiter(std::coroutine_handle<promise_type> coroutine) : _coroutine(coroutine)
+            {
+            }
 
-            bool await_ready() const  { return false; }
-    
+            bool await_ready() const { return false; }
+
             /**
              * @brief 保存调用当前的协程的协程句柄, 配合PreviousAwaiter
              */
-            std::coroutine_handle<promise_type> await_suspend(std::coroutine_handle<> coroutine) const  
+            std::coroutine_handle<promise_type> await_suspend(std::coroutine_handle<> coroutine) const
             {
-                _coroutine.promise()._coroutine= coroutine;
+                _coroutine.promise()._coroutine = coroutine;
                 return _coroutine;
             }
-    
-            T await_resume() const 
+
+            T await_resume() const
             {
                 return _coroutine.promise().result();
             }
-    
+
             std::coroutine_handle<promise_type> _coroutine;
         };
-    
-        auto operator co_await() const  
+
+        auto operator co_await() const
         {
             return Awaiter(_coroutine);
         }
-    
+
     private:
-        std::coroutine_handle<promise_type> _coroutine=nullptr;
+        std::coroutine_handle<promise_type> _coroutine = nullptr;
     };
 
 }

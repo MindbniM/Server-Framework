@@ -10,23 +10,39 @@ namespace MindbniM
 
     class TcpServer;
 
+    /**
+     * @brief Tcp连接
+     */
     struct TcpConnect : public std::enable_shared_from_this<TcpConnect>
     {
         using ptr=std::shared_ptr<TcpConnect>;
-        using CallBack=std::function<void(TcpConnect::ptr)>;
+        using CallBack=std::function<void()>;
+
+        /**
+         * @brief 构造函数
+         * @param[in] tcp Tcp套接字
+         * @param[in] root 所属TcpServer
+         */
         TcpConnect(TcpSocket::ptr tcp,TcpServer* root):_sock(tcp),_root(root)
         {}
 
+        /**
+         * @brief 接收数据协程
+         */
         Task<void> Recv(int flags);
+
+        /**
+         * @brief 发送数据协程
+         */
         Task<void> Send(int flags);
 
-        TcpSocket::ptr _sock;
-        Buffer _in;
-        Buffer _out;
-        CallBack _rcb;
-        static int _maxBuferSize;
-        static int _timeout;
-        TcpServer* _root;
+        TcpSocket::ptr _sock;       //Tcp套接字
+        Buffer _in;                 //输入缓冲区
+        Buffer _out;                //输出缓冲区
+        CallBack _rcb;              //读到消息的回调
+        static int _maxBuferSize;   //最大缓冲区大小
+        static int _timeout;        //最大检测缓冲区时间
+        TcpServer* _root;           //所属TcpServer
     };
 
     /**
@@ -100,10 +116,19 @@ namespace MindbniM
          */
         bool isStop() const { return _isStop; }
 
+        /**
+         * @brief 序列化字符串
+         */
         virtual std::string toString(const std::string &prefix = "");
 
+        /**
+         * @brief 获取监听套接字
+         */
         std::vector<TcpSocket::ptr> getSocks() const { return _listens; }
 
+        /**
+         * @brief 删除一个连接
+         */
         void delConnect(TcpConnect::ptr conn);
     protected:
         /**
@@ -117,22 +142,14 @@ namespace MindbniM
         virtual Task<void> startAccept(TcpSocket::ptr sock);
 
     protected:
-        // 监听Socket数组
-        std::vector<TcpSocket::ptr> _listens;
-        std::unordered_set<TcpConnect::ptr> _connects;
-        // 服务器Socket接收连接的调度器
-        IoManager *_accept;
-        // 新连接的Socket工作的调度器
-        IoManager *_worker;
-        // 接收超时时间(毫秒)
-        uint64_t _recvTimeout;
-        // 服务器名称
-        std::string _name;
-        // 服务器类型
-        std::string _type = "tcp";
-        // 服务是否停止
-        bool _isStop;
-
+        std::vector<TcpSocket::ptr> _listens;               // 监听Socket数组
+        std::unordered_set<TcpConnect::ptr> _connects;      // 连接管理 
+        IoManager *_accept;                                 // 服务器Socket接收连接的调度器
+        IoManager *_worker;                                 // 新连接的Socket工作的调度器
+        uint64_t _recvTimeout;                              // 接收超时时间(毫秒)
+        std::string _name;                                  // 服务器名称
+        std::string _type = "tcp";                          // 服务器类型
+        bool _isStop;                                       // 服务是否停止
         bool _ssl = false;
     };
 }

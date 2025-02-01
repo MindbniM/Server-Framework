@@ -26,7 +26,8 @@ namespace MindbniM
                 if(_root) _root->delConnect(shared_from_this());
                 co_return;
             }
-            if(_rcb) _rcb(shared_from_this());
+            LOG_DEBUG(LOG_ROOT())<<"recv ....";
+            if(_rcb) _rcb();
             co_yield 0;
         }
     }
@@ -67,6 +68,8 @@ namespace MindbniM
         if(it!=_connects.end())
         {
             _connects.erase(it);
+            int op=READ|WRITE;
+            _worker->delEvent(conn->_sock->getSock(),(Event)op);
         }
     }
     bool TcpServer::bind(Address::ptr addr, bool ssl)
@@ -138,10 +141,12 @@ namespace MindbniM
             TcpConnect::ptr client (new TcpConnect(sock->accept(),this));
             if (client)
             {
-                LOG_DEBUG(LOG_ROOT())<<"new connect : "<<client->_sock->getLocalAddr()->toString();
+                LOG_DEBUG(LOG_ROOT())<<"new connect : "<<client->_sock->to_string();
+                Util::setFdNoBlock(client->_sock->getSock());
                 _connects.insert(client);
-                client->_rcb=std::bind(&TcpServer::handleClient,this,std::placeholders::_1);
+                client->_rcb=std::bind(&TcpServer::handleClient,this,client);
                 Task<void> f=client->Recv(0);
+                f.get_coroutine().promise().set_managed_by_schedule();
                 _worker->addEvent(client->_sock->getSock(),READ,f.get_coroutine());
             }
             else
@@ -177,7 +182,7 @@ namespace MindbniM
 
     void TcpServer::handleClient(TcpConnect::ptr client)
     {
-        LOG_INFO(g_logger) << "handleClient: " << client->_out.Retrieve_AllToStr();
+        LOG_INFO(LOG_ROOT()) << "handleClient: " << client->_out.Retrieve_AllToStr();
     }
 
     std::string TcpServer::toString(const std::string &prefix)

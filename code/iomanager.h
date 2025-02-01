@@ -73,7 +73,7 @@ namespace MindbniM
          * @param[in] name 调度器名称
          * @param[in] auto_close 是否自动关闭
          */
-        IoManager(int threads=1,bool use_call=true,const std::string& name="Scheduler",bool auto_close=true);
+        IoManager(int threads=1,bool use_call=true,const std::string& name="Scheduler",bool auto_close=false);
         
         /**
          * @brief 调用stop停止调度器
@@ -146,7 +146,7 @@ namespace MindbniM
     template<TaskType F>
     bool IoManager::addEvent(int fd,Event event,F cb)
     {
-        //LOG_DEBUG(LOG_ROOT())<<_name;
+        LOG_DEBUG(LOG_ROOT())<<_name<<" add event fd:"<<fd;
         FdContext::ptr p=nullptr;
         std::shared_lock<std::shared_mutex> rlock(_mutex);
         if((int)_fdcontexts.size()>fd)
@@ -166,7 +166,8 @@ namespace MindbniM
             return false;
         }
         int op=p->_event? EPOLL_CTL_MOD:EPOLL_CTL_ADD;
-        _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event|EPOLLEXCLUSIVE,op);
+        //LOG_DEBUG(LOG_ROOT())<<fd<<" "<<event<<"("<<EPOLLIN<<" "<<EPOLLOUT<<") "<<op;
+        _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event,op);
         _pendingEventCount++;
         int _ev_=p->_event;
         _ev_|=(int)event;

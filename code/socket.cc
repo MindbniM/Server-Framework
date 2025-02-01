@@ -59,15 +59,17 @@ namespace MindbniM
     }
     TcpSocket::ptr TcpSocket::accept()
     {
-        sockaddr_in6 peer = {0};
+        sockaddr_in peer = {0};
         socklen_t len = sizeof(peer);
-        int n = ::accept4(_sock, (sockaddr *)&peer, &len,SOCK_NONBLOCK);
-        if (n < 0)
+        int fd = ::accept4(_sock, (sockaddr *)&peer, &len,SOCK_NONBLOCK);
+        if (fd < 0)
         {
             LOG_ERROR(LOG_ROOT()) << "socket accept error : " << strerror(errno);
             return nullptr;
         }
-        return std::make_shared<TcpSocket>(n);
+        auto p=std::make_shared<TcpSocket>(fd,true);
+        p->setLocalAddr(std::make_shared<IPv4Address>(peer));
+        return p;
     }
     bool TcpSocket::listen(int backlog)
     {

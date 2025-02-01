@@ -360,7 +360,7 @@ namespace MindbniM
         /**
          * @brief 获取配置的值
          */
-        T getVal() const 
+        T getVal()
         {
             std::shared_lock<std::shared_mutex> lock(_mutex);
             return _val;

@@ -41,10 +41,6 @@ namespace MindbniM
     FdContext::~FdContext()
     {
         clear();
-        if (_fd > 0)
-        {
-            ::close(_fd);
-        }
     }
     IoManager::IoManager(int threads, bool use_call, const std::string &name,bool auto_close)
         : Schedule(threads, use_call, name,auto_close)
@@ -76,6 +72,7 @@ namespace MindbniM
     }
     bool IoManager::delEvent(int fd, Event event)
     {
+        LOG_DEBUG(LOG_ROOT())<<_name<<" del fd: "<<fd;
         FdContext::ptr p = nullptr;
         std::shared_lock<std::shared_mutex> rlock(_mutex);
         if ((int)_fdcontexts.size()<fd)
@@ -86,7 +83,7 @@ namespace MindbniM
             return false;
         Event nevent = (Event)((p->_event) & (~event));
         int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        _epoll.ctlEvent(fd, EPOLLET | (int)event | EPOLLEXCLUSIVE, op);
+        _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
         --_pendingEventCount;
         p->_event = nevent;
         p->getContext(event).clear();
@@ -104,7 +101,7 @@ namespace MindbniM
             return false;
         Event nevent = (Event)((p->_event) & (~event));
         int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        _epoll.ctlEvent(fd, EPOLLET | (int)event | EPOLLEXCLUSIVE, op);
+        _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
         --_pendingEventCount;
         p->triggerEvent(event);
         return true;
@@ -148,7 +145,7 @@ namespace MindbniM
         std::vector<epoll_event> events;
         while (1)
         {
-            LOG_DEBUG(LOG_ROOT()) << "IoManager::idle thread is " << Thread::GetName();
+            //LOG_DEBUG(LOG_ROOT()) << "IoManager::idle thread is " << Thread::GetName();
             if (stopping())
             {
                 LOG_DEBUG(LOG_ROOT()) << "IoManager is exits " << Thread::GetName();
@@ -180,6 +177,7 @@ namespace MindbniM
             for (int i = 0; i < n; i++)
             {
                 epoll_event &ev = events[i];
+                LOG_DEBUG(LOG_ROOT())<<_name<<" -> "<<ev.data.fd<<" is readly";
                 if (ev.data.fd == _tfd.fd())
                 {
                     char temp[256];
@@ -206,20 +204,24 @@ namespace MindbniM
                 {
                     continue;
                 }
-                int mevent = p->_event & (~revent);
-                int op = mevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-                _epoll.ctlEvent(ev.data.fd, mevent | EPOLLET | EPOLLEXCLUSIVE, op);
-                if (mevent & READ)
+                //int mevent = p->_event & (~revent);
+                //int op = mevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+                //LOG_DEBUG(LOG_ROOT())<<op<<" "<<mevent;
+                //_epoll.ctlEvent(ev.data.fd, mevent | EPOLLET, op);
+                if (revent & READ)
                 {
+                    LOG_DEBUG(LOG_ROOT())<<"read event";
                     p->triggerEvent(READ);
                     --_pendingEventCount;
                 }
-                if (mevent & WRITE)
+                if (revent & WRITE)
                 {
+                    LOG_DEBUG(LOG_ROOT())<<"write event";
                     p->triggerEvent(WRITE);
                     --_pendingEventCount;
                 }
             }
+            events.clear();
             co_yield 0;
         }
     }
