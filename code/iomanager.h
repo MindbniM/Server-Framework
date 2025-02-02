@@ -23,7 +23,6 @@ namespace MindbniM
         {
             _task.clear();
             _root = nullptr;
-            epoll_event ev;
         }
         TaskAndF _task;  // 任务
         Schedule *_root; // 关联的调度器
@@ -39,7 +38,7 @@ namespace MindbniM
         FdContext(int fd,Event event);
 
         /**
-         * @brief 关闭文件描述符
+         * @brief 清理资源
          */
         ~FdContext();
 
@@ -146,7 +145,6 @@ namespace MindbniM
     template<TaskType F>
     bool IoManager::addEvent(int fd,Event event,F cb)
     {
-        LOG_DEBUG(LOG_ROOT())<<_name<<" add event fd:"<<fd;
         FdContext::ptr p=nullptr;
         std::shared_lock<std::shared_mutex> rlock(_mutex);
         if((int)_fdcontexts.size()>fd)
@@ -161,17 +159,18 @@ namespace MindbniM
             contextResize(fd * 1.5);
             p=_fdcontexts[fd];
         }
-        if(p->_event&event)
-        {
-            return false;
-        }
-        int op=p->_event? EPOLL_CTL_MOD:EPOLL_CTL_ADD;
-        //LOG_DEBUG(LOG_ROOT())<<fd<<" "<<event<<"("<<EPOLLIN<<" "<<EPOLLOUT<<") "<<op;
-        _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event,op);
+        //if(p->_event&event)
+        //{
+        //    LOG_INFO(LOG_ROOT())<<fd<<" add ? "<<p->_event<<" "<<event;
+        //    return false;
+        //}
+        LOG_INFO(LOG_ROOT())<<"add "<<fd<<" "<<event<<"("<<EPOLLIN<<" "<<EPOLLOUT<<") ";
+        _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event,EPOLL_CTL_ADD);
         _pendingEventCount++;
         int _ev_=p->_event;
         _ev_|=(int)event;
         p->_event=(Event)_ev_;
+        //LOG_DEBUG(LOG_ROOT())<<_name<<" add event fd:"<<fd<<" "<<p->_event;
         EventContext& ev=p->getContext(event);
         ev._root=Schedule::GetThis();
         ev._task=TaskAndF(cb);

@@ -11,41 +11,61 @@ namespace MindbniM
 
     static Logger::ptr g_logger = LOG_NAME("system");
 
-    int TcpConnect::_maxBuferSize=1024*1024*2;
-    int TcpConnect::_timeout=10000;
-    Task<void> TcpConnect::Recv(int flags)
+    int TcpConnect::_maxBuferSize = 1024 * 1024 * 2;
+    int TcpConnect::_timeout = 10000;
+    Task<void> TcpConnect::_Recv(TcpConnect::ptr conn,int flags)
     {
-        while(1)
+        while (1)
         {
-            int err=0;
-            ssize_t n=_sock->recv(_out,flags,err);
-            if(n<=0)
+            int err = 0;
+            ssize_t n = conn->_sock->recv(conn->_out, flags, err);
+            LOG_INFO(LOG_ROOT()) << "recv... "<<n;
+            if (n <= 0)
             {
-                int event=READ|WRITE;
-                IoManager::GetThis()->delEvent(_sock->getSock(),(Event)event);
-                if(_root) _root->delConnect(shared_from_this());
+                int event = READ | WRITE;
+                IoManager::GetThis()->delEvent(conn->_sock->getSock(), (Event)event);
+                //if (_root)
+                //    _root->delConnect(shared_from_this());
+                conn->_sock->close();
                 co_return;
             }
-            LOG_DEBUG(LOG_ROOT())<<"recv ....";
-            if(_rcb) _rcb();
+            if (conn->_rcb)
+            {
+                IoManager::GetThis()->push(conn->_rcb);
+                //conn->_rcb();
+            }
             co_yield 0;
         }
     }
-    Task<void> TcpConnect::Send(int flags)
+    Task<void> TcpConnect::_Send(TcpConnect::ptr conn,int flags)
     {
-        while(1)
+        while (1)
         {
-            int err=0;
-            ssize_t n=_sock->send(_in,flags,err);
-            if(n<0)
+            int err = 0;
+            ssize_t n = conn->_sock->send(conn->_in, flags, err);
+            if (n < 0)
             {
-                int event=READ|WRITE;
-                IoManager::GetThis()->delEvent(_sock->getSock(),(Event)event);
-                if(_root) _root->delConnect(shared_from_this());
+                int event = READ | WRITE;
+                IoManager::GetThis()->delEvent(conn->_sock->getSock(), (Event)event);
+                if (conn->_root)
+                    conn->_root->delConnect(conn);
+                co_return;
+            }
+            if (conn->_in.Read_ableBytes() == 0)
+            {
+                IoManager::GetThis()->delEvent(conn->_sock->getSock(), WRITE);
                 co_return;
             }
             co_yield 0;
         }
+    }
+    void TcpConnect::Send(const std::string &message, int flags)
+    {
+        _in.Append(message);
+        Task<void> s = _Send(shared_from_this(),flags);
+        s.get_coroutine().promise().set_managed_by_schedule();
+        IoManager::GetThis()->push(s.get_coroutine());
+        // IoManager::GetThis()->addEvent(_sock->getSock(),WRITE,s.get_coroutine());
     }
     TcpServer::TcpServer(IoManager *listen, IoManager *worker)
         : _worker(worker), _accept(listen), _recvTimeout(g_tcp_server_read_timeout->getVal()), _name("MindbniM/1.0.0"), _isStop(true)
@@ -64,12 +84,10 @@ namespace MindbniM
 
     void TcpServer::delConnect(TcpConnect::ptr conn)
     {
-        auto it=_connects.find(conn);
-        if(it!=_connects.end())
+        auto it = _connects.find(conn);
+        if (it != _connects.end())
         {
             _connects.erase(it);
-            int op=READ|WRITE;
-            _worker->delEvent(conn->_sock->getSock(),(Event)op);
         }
     }
     bool TcpServer::bind(Address::ptr addr, bool ssl)
@@ -89,6 +107,7 @@ namespace MindbniM
                                 << " addr=[" << addr->toString() << "]";
             return false;
         }
+        Util::setFdNoBlock(sock->getSock());
         _listens.push_back(sock);
         return true;
     }
@@ -136,18 +155,20 @@ namespace MindbniM
 
     Task<void> TcpServer::startAccept(TcpSocket::ptr sock)
     {
-        while (!_isStop)
+        while (1)
         {
-            TcpConnect::ptr client (new TcpConnect(sock->accept(),this));
-            if (client)
+            TcpSocket::ptr newSock = sock->accept();
+            LOG_INFO(LOG_ROOT()) << "startAccept";
+            if (newSock != nullptr)
             {
-                LOG_DEBUG(LOG_ROOT())<<"new connect : "<<client->_sock->to_string();
+                TcpConnect::ptr client(new TcpConnect(newSock, this));
+                LOG_INFO(LOG_ROOT()) << "new connect : " << client->_sock->to_string();
                 Util::setFdNoBlock(client->_sock->getSock());
                 _connects.insert(client);
-                client->_rcb=std::bind(&TcpServer::handleClient,this,client);
-                Task<void> f=client->Recv(0);
+                client->_rcb = std::bind(&TcpServer::handleClient, this, client);
+                Task<void> f = TcpConnect::_Recv(client,0);
                 f.get_coroutine().promise().set_managed_by_schedule();
-                _worker->addEvent(client->_sock->getSock(),READ,f.get_coroutine());
+                _worker->addEvent(client->_sock->getSock(), READ, f.get_coroutine());
             }
             else
             {
@@ -165,10 +186,10 @@ namespace MindbniM
         _isStop = false;
         for (auto &sock : _listens)
         {
-            LOG_DEBUG(LOG_ROOT())<<sock->to_string();
-            Task<void> acceptCor=startAccept(sock);
+            LOG_DEBUG(LOG_ROOT()) <<"listen ->"<< sock->to_string();
+            Task<void> acceptCor = startAccept(sock);
             acceptCor.get_coroutine().promise().set_managed_by_schedule();
-            _accept->addEvent(sock->getSock(),READ,acceptCor.get_coroutine());
+            _accept->addEvent(sock->getSock(), READ, acceptCor.get_coroutine());
         }
         return true;
     }
@@ -182,7 +203,24 @@ namespace MindbniM
 
     void TcpServer::handleClient(TcpConnect::ptr client)
     {
-        LOG_INFO(LOG_ROOT()) << "handleClient: " << client->_out.Retrieve_AllToStr();
+        // LOG_INFO(LOG_ROOT()) << "handleClient: " <<
+        client->_out.Retrieve_AllToStr();
+        const char *response =
+            "HTTP/1.0 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Connection: close\r\n"
+            "Content-Length: 1\r\n"
+            "\r\n"
+            "1";
+
+        int err;
+        LOG_INFO(LOG_ROOT()) << "send ...";
+        client->_sock->send(response, 0, err);
+        // client->Send(response,0);
+        int op=READ|WRITE;
+        IoManager::GetThis()->delEvent(client->_sock->getSock(), (Event)op);
+        client->_sock->close();
+        //client->_root->delConnect(client);
     }
 
     std::string TcpServer::toString(const std::string &prefix)

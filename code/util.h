@@ -7,11 +7,11 @@ namespace MindbniM
 {
     namespace Util
     {
-#define ASSERT(x, logger, message, error)                \
-    if (x)                                               \
-    {                                                    \
-        LOG_ERROR(LOG_NAME(logger)) << "ASSERTION: " #x; \
-        throw error(message);                            \
+#define ASSERT(x, logger, message, error)                                  \
+    if (x)                                                                 \
+    {                                                                      \
+        LOG_ERROR(LOG_NAME(logger)) << "ASSERTION: " #x << " " << message; \
+        throw error(message);                                              \
     }
 
         /**

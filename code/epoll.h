@@ -55,7 +55,7 @@ namespace MindbniM
             ev.events = events;
             ev.data.fd = fd;
             int n = epoll_ctl(_epollFd, operation, fd, &ev);
-            ASSERT(n < 0, "root", "Failed to operate event in epoll", std::runtime_error)
+            ASSERT(n < 0, "root", std::to_string(fd)+" "+strerror(errno), std::runtime_error)
         }
 
         int _epollFd;

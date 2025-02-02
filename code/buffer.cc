@@ -138,7 +138,7 @@ namespace MindbniM
                 }
                 else
                 {
-                    LOG_ERROR(LOG_ROOT()) << "send error : "<<strerror(errno);
+                    LOG_ERROR(LOG_ROOT()) <<"fd: "<<sock<< " send error : "<<strerror(errno);
                     return -1;
                 }
             }

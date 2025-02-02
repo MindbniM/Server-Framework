@@ -29,12 +29,14 @@ namespace MindbniM
         /**
          * @brief 接收数据协程
          */
-        Task<void> Recv(int flags);
+        static Task<void> _Recv(TcpConnect::ptr conn,int flags);
 
         /**
          * @brief 发送数据协程
          */
-        Task<void> Send(int flags);
+        static Task<void> _Send(TcpConnect::ptr conn,int flags);
+
+        void Send(const std::string& message,int flags);
 
         TcpSocket::ptr _sock;       //Tcp套接字
         Buffer _in;                 //输入缓冲区

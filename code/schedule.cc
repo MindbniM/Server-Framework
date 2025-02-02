@@ -52,16 +52,18 @@ namespace MindbniM
             if(t._coroutine)
             {
                 _activeCount++;
+                //if(t._coroutine.done())
+                //{
+                //    if(t._coroutine.promise()._excption)
+                //    throw t._coroutine.promise()._excption;
+                //}
                 if(!t._coroutine.done())
                 {
                     t._coroutine.resume();
                 }
-                else
+                else if(t._coroutine.done()&&t._coroutine.promise().managed_by_schedule()) 
                 {
-                    if(t._coroutine.promise().managed_by_schedule()) 
-                    {
-                        t._coroutine.destroy();
-                    }
+                    //t._coroutine.destroy();
                 }
                 _activeCount--;
             }

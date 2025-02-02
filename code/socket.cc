@@ -43,7 +43,7 @@ namespace MindbniM
             LOG_ERROR(LOG_ROOT()) << "socket bind error : " << strerror(errno);
             return false;
         }
-        _localAddr=addr;
+        _localAddr = addr;
         _isBind = true;
         return true;
     }
@@ -61,13 +61,20 @@ namespace MindbniM
     {
         sockaddr_in peer = {0};
         socklen_t len = sizeof(peer);
-        int fd = ::accept4(_sock, (sockaddr *)&peer, &len,SOCK_NONBLOCK);
+        int fd = ::accept4(_sock, (sockaddr *)&peer, &len, SOCK_NONBLOCK);
         if (fd < 0)
         {
-            LOG_ERROR(LOG_ROOT()) << "socket accept error : " << strerror(errno);
+            // 说明已经没有更多的连接可以接受了
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+            }
+            else
+            {
+                LOG_ERROR(LOG_ROOT()) << "socket accept error : " << strerror(errno);
+            }
             return nullptr;
         }
-        auto p=std::make_shared<TcpSocket>(fd,true);
+        auto p = std::make_shared<TcpSocket>(fd, true);
         p->setLocalAddr(std::make_shared<IPv4Address>(peer));
         return p;
     }
@@ -164,7 +171,7 @@ namespace MindbniM
                 }
                 else
                 {
-                    LOG_ERROR(LOG_ROOT())<<"recv error";
+                    LOG_ERROR(LOG_ROOT()) << "recv error";
                     _isConnect = false;
                     return -1;
                 }
@@ -180,7 +187,7 @@ namespace MindbniM
     {
         if (_isClose || _sock < 0)
             return false;
-        LOG_DEBUG(LOG_ROOT())<<to_string()<<" is Close";
+        LOG_INFO(LOG_ROOT()) << to_string() << " is Close";
         ::close(_sock);
         _isClose = true;
         return true;
@@ -204,14 +211,15 @@ namespace MindbniM
         _to_string(ss);
         return ss.str();
     }
-    ssize_t TcpSocket::send(Buffer& message,int flags,int& err)
+    ssize_t TcpSocket::send(Buffer &message, int flags, int &err)
     {
-        if(!_isConnect) return -1;
-        return message.Send(_sock,flags,&err);
+        if (!_isConnect)
+            return -1;
+        return message.Send(_sock, flags, &err);
     }
-    ssize_t TcpSocket::recv(Buffer& message,int flags,int& err)
+    ssize_t TcpSocket::recv(Buffer &message, int flags, int &err)
     {
-        return message.Recv(_sock,flags,&err);
+        return message.Recv(_sock, flags, &err);
     }
     std::ostream &operator<<(std::ostream &os, const TcpSocket &sock)
     {

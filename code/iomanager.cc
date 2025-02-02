@@ -12,7 +12,7 @@ namespace MindbniM
             return _write;
         default:
         {
-            LOG_WARNING(LOG_NAME("system")) << "unknow event";
+            LOG_WARNING(LOG_ROOT()) << "unknow event";
             throw std::invalid_argument("unknow event");
         }
         }
@@ -72,21 +72,22 @@ namespace MindbniM
     }
     bool IoManager::delEvent(int fd, Event event)
     {
-        LOG_DEBUG(LOG_ROOT())<<_name<<" del fd: "<<fd;
         FdContext::ptr p = nullptr;
         std::shared_lock<std::shared_mutex> rlock(_mutex);
         if ((int)_fdcontexts.size()<fd)
             return false;
         p = _fdcontexts[fd];
         rlock.unlock();
-        if (!(p->_event & event))
-            return false;
+        //if (!(p->_event & event))
+        //    return false;
         Event nevent = (Event)((p->_event) & (~event));
         int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
+        _epoll.ctlEvent(fd, EPOLLET | (int)nevent, op);
+        LOG_INFO(LOG_ROOT())<<"del... fd: "<<fd<<" "<<p->_event<<" "<<event<<" "<<op;
         --_pendingEventCount;
         p->_event = nevent;
-        p->getContext(event).clear();
+        if(event&READ)  p->getContext(READ).clear();
+        if(event&WRITE)  p->getContext(WRITE).clear();
         return true;
     }
     bool IoManager::cencelEvent(int fd, Event event)
@@ -101,6 +102,7 @@ namespace MindbniM
             return false;
         Event nevent = (Event)((p->_event) & (~event));
         int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+        LOG_INFO(LOG_ROOT())<<"cencel fd: "<<fd;
         _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
         --_pendingEventCount;
         p->triggerEvent(event);
@@ -158,6 +160,7 @@ namespace MindbniM
                 uint64_t next = _tfd.getNextTimer();
                 next = std::min(next, MaxTimeOut);
                 n = _epoll.wait(events, next);
+                LOG_DEBUG(LOG_ROOT())<<_name<<" -> "<<n<<" events is readly";
                 if (n < 0 && errno == EINTR)
                 {
                     continue;
@@ -177,7 +180,7 @@ namespace MindbniM
             for (int i = 0; i < n; i++)
             {
                 epoll_event &ev = events[i];
-                LOG_DEBUG(LOG_ROOT())<<_name<<" -> "<<ev.data.fd<<" is readly";
+                LOG_INFO(LOG_ROOT())<<_name<<" -> "<<ev.data.fd<<" is readly : "<<ev.events;
                 if (ev.data.fd == _tfd.fd())
                 {
                     char temp[256];
