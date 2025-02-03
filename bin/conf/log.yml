@@ -1,0 +1,19 @@
+#示例
+#logs:
+#  - name: log-name  # 日志器名称
+#    level: debug    # 日志级别，支持 [debug/info/warning/error/fatal]，不写默认为 debug
+#    appenders:
+#      - out: stdout  # 输出到标准输出
+#        level: debug  # 输出级别
+#      - out: PATH/filename  # 除了stdout其他名字都是输出到文件路径
+#        formatter: "[%p][%d{%Y-%m-%d %H:%M:%S}][%f:%l]%m%n"  # 日志格式，不写默认格式是此格式
+
+logs:
+    - name: root
+      level: debug
+      appenders:
+          - out: stdout
+    - name: system
+      level: info
+      appenders:
+          - out: "system.log"

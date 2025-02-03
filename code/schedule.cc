@@ -52,13 +52,14 @@ namespace MindbniM
             if(t._coroutine)
             {
                 _activeCount++;
-                //if(t._coroutine.done())
-                //{
-                //    if(t._coroutine.promise()._excption)
-                //    throw t._coroutine.promise()._excption;
-                //}
+                if(t._coroutine.done())
+                {
+                    if(t._coroutine.promise()._excption)
+                    throw t._coroutine.promise()._excption;
+                }
                 if(!t._coroutine.done())
                 {
+                    //LOG_INFO(LOG_ROOT())<<"resume";
                     t._coroutine.resume();
                 }
                 else if(t._coroutine.done()&&t._coroutine.promise().managed_by_schedule()) 

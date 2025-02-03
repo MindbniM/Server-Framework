@@ -30,7 +30,7 @@ namespace MindbniM
         {
             ev._root->push(ev._task._cb);
         }
-        if (ev._task._coroutine)
+        else if (ev._task._coroutine)
         {
             ev._root->push(ev._task._coroutine);
         }
