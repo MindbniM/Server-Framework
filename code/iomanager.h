@@ -26,6 +26,7 @@ namespace MindbniM
         }
         TaskAndF _task;  // 任务
         Schedule *_root; // 关联的调度器
+        bool _recurring = false;//是否循环监控
     };
 
     /**
@@ -33,7 +34,6 @@ namespace MindbniM
      */
     struct FdContext
     {
-        using ptr = std::shared_ptr<FdContext>;
         FdContext()=default;
         FdContext(int fd,Event event);
 
@@ -58,6 +58,7 @@ namespace MindbniM
         void clear();
 
         int _fd=-1;                 //文件描述符
+        std::mutex _mutex;          //互斥锁
         EventContext _read;         //读事件
         EventContext _write;        //写事件
         Event _event = Event::NONE; //事件类型
@@ -92,7 +93,7 @@ namespace MindbniM
          * @param[in] cb 执行的协程或回调
          */
         template<TaskType F>
-        bool addEvent(int fd,Event event,F cb);
+        bool addEvent(int fd,Event event,F cb,bool recurring=false);
 
         /**
         * @brief 删除事件
@@ -104,13 +105,13 @@ namespace MindbniM
          * @brief 取消事件
         * @attention 会触发事件
          */
-        bool cencelEvent(int fd,Event event);
+        bool cancelEvent(int fd,Event event);
 
         /**
          * @brief 取消一个文件描述符上的所有事件
         * @attention 会触发事件
          */
-        bool cencelAll(int fd);
+        bool cancelAll(int fd);
 
         /**
          * @brief 提前唤醒在idle协程处epoll_wait的线程, 提示有任务
@@ -138,42 +139,86 @@ namespace MindbniM
         Epoll _epoll;                                       //epoll句柄
         std::shared_mutex _mutex;                           //读写锁
         std::atomic<int> _pendingEventCount={0};            //当前等待执行的任务数量
-        std::vector<FdContext::ptr> _fdcontexts;            //Fd事件储存
+        std::vector<FdContext*> _fdcontexts;            //Fd事件储存
         TimerFd _tfd;                                       //定时器
     };
 
+    //template<TaskType F>
+    //bool IoManager::addEvent(int fd,Event event,F cb)
+    //{
+    //    FdContext::ptr p=nullptr;
+    //    std::shared_lock<std::shared_mutex> rlock(_mutex);
+    //    if((int)_fdcontexts.size()>fd)
+    //    {
+    //        p=_fdcontexts[fd];
+    //        rlock.unlock();
+    //    }
+    //    else 
+    //    {
+    //        rlock.unlock();
+    //        std::unique_lock<std::shared_mutex> wlock(_mutex);
+    //        contextResize(fd * 1.5);
+    //        p=_fdcontexts[fd];
+    //    }
+    //    //if(p->_event&event)
+    //    //{
+    //    //    LOG_INFO(LOG_ROOT())<<fd<<" 事件重复 "<<p->_event<<" "<<event;
+    //    //    return false;
+    //    //}
+    //    LOG_INFO(LOG_ROOT())<<"add "<<fd<<" "<<event<<"("<<EPOLLIN<<" "<<EPOLLOUT<<") ";
+    //    _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event,EPOLL_CTL_ADD);
+    //    _pendingEventCount++;
+    //    int _ev_=p->_event;
+    //    _ev_|=(int)event;
+    //    p->_event=(Event)_ev_;
+    //    //LOG_DEBUG(LOG_ROOT())<<_name<<" add event fd:"<<fd<<" "<<p->_event;
+    //    EventContext& ev=p->getContext(event);
+    //    ev._root=Schedule::GetThis();
+    //    ev._task=TaskAndF(cb);
+    //    return true;
+    //}
     template<TaskType F>
-    bool IoManager::addEvent(int fd,Event event,F cb)
+    bool IoManager::addEvent(int fd,Event event,F cb,bool recurring)
     {
-        FdContext::ptr p=nullptr;
-        std::shared_lock<std::shared_mutex> rlock(_mutex);
-        if((int)_fdcontexts.size()>fd)
+        FdContext *fd_ctx = nullptr;
+ 
+        std::shared_lock<std::shared_mutex> read_lock(_mutex);
+        if ((int)_fdcontexts.size() > fd)
         {
-            p=_fdcontexts[fd];
-            rlock.unlock();
+            fd_ctx = _fdcontexts[fd];
+            read_lock.unlock();
         }
-        else 
+        else
         {
-            rlock.unlock();
-            std::unique_lock<std::shared_mutex> wlock(_mutex);
+            read_lock.unlock();
+            std::unique_lock<std::shared_mutex> write_lock(_mutex);
             contextResize(fd * 1.5);
-            p=_fdcontexts[fd];
+            fd_ctx = _fdcontexts[fd];
         }
-        //if(p->_event&event)
-        //{
-        //    LOG_INFO(LOG_ROOT())<<fd<<" add ? "<<p->_event<<" "<<event;
-        //    return false;
-        //}
-        LOG_INFO(LOG_ROOT())<<"add "<<fd<<" "<<event<<"("<<EPOLLIN<<" "<<EPOLLOUT<<") ";
-        _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event,EPOLL_CTL_ADD);
-        _pendingEventCount++;
-        int _ev_=p->_event;
-        _ev_|=(int)event;
-        p->_event=(Event)_ev_;
-        //LOG_DEBUG(LOG_ROOT())<<_name<<" add event fd:"<<fd<<" "<<p->_event;
-        EventContext& ev=p->getContext(event);
-        ev._root=Schedule::GetThis();
-        ev._task=TaskAndF(cb);
-        return true;
+        std::lock_guard<std::mutex> lock(fd_ctx->_mutex);
+ 
+        if(fd_ctx->_event & event)
+        {
+            return false;
+        }
+ 
+        LOG_INFO(LOG_ROOT()) << "add " << fd << " " << event << "(" << EPOLLIN << " " << EPOLLOUT << ")";
+        int op = fd_ctx->_event ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
+        epoll_event epevent;
+        epevent.events   = EPOLLET | fd_ctx->_event | event;
+        epevent.data.ptr = fd_ctx;
+
+        _epoll.ctlEvent(fd,&epevent,op);
+        ++_pendingEventCount;
+
+        fd_ctx->_event = (Event)(fd_ctx->_event | event);
+ 
+        EventContext& event_ctx = fd_ctx->getContext(event);
+        event_ctx._root = Schedule::GetThis();
+        event_ctx._task = TaskAndF(cb);
+        event_ctx._recurring = recurring;
+        return 0;
     }
+ 
+
 }

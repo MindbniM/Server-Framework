@@ -39,7 +39,7 @@ namespace MindbniM
 
         void delEvent(int fd)
         {
-            ctlEvent(fd, 0, EPOLL_CTL_DEL);
+            ctlEvent(fd, (uint32_t)0, EPOLL_CTL_DEL);
         }
 
         int wait(std::vector<epoll_event>& events,int timeoutMs = -1)
@@ -56,6 +56,11 @@ namespace MindbniM
             ev.data.fd = fd;
             int n = epoll_ctl(_epollFd, operation, fd, &ev);
             ASSERT(n < 0, "root", std::to_string(fd)+" "+strerror(errno), std::runtime_error)
+        }
+        void ctlEvent(int fd, struct epoll_event* ev, int operation)
+        {
+            int n = epoll_ctl(_epollFd, operation, fd, ev);
+            ASSERT(n < 0, "root", std::to_string(fd)+" "+std::to_string(operation)+" "+strerror(errno), std::runtime_error)
         }
 
         int _epollFd;

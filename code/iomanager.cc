@@ -29,10 +29,18 @@ namespace MindbniM
         if (ev._task._cb)
         {
             ev._root->push(ev._task._cb);
+            if(ev._recurring)
+            {
+                IoManager::GetThis()->addEvent(_fd,event,ev._task._cb,ev._recurring);
+            }
         }
         else if (ev._task._coroutine)
         {
             ev._root->push(ev._task._coroutine);
+            if(ev._recurring)
+            {
+                IoManager::GetThis()->addEvent(_fd,event,ev._task._coroutine,ev._recurring);
+            }
         }
     }
     FdContext::FdContext(int fd, Event event) : _fd(fd), _event(event)
@@ -42,8 +50,8 @@ namespace MindbniM
     {
         clear();
     }
-    IoManager::IoManager(int threads, bool use_call, const std::string &name,bool auto_close)
-        : Schedule(threads, use_call, name,auto_close)
+    IoManager::IoManager(int threads, bool use_call, const std::string &name, bool auto_close)
+        : Schedule(threads, use_call, name, auto_close)
     {
         Util::setFdNoBlock(_tfd.fd());
         _epoll.addEvent(_tfd.fd(), EPOLLIN | EPOLLET);
@@ -65,72 +73,185 @@ namespace MindbniM
         {
             if (!_fdcontexts[i])
             {
-                _fdcontexts[i] = std::make_shared<FdContext>();
+                _fdcontexts[i] = new FdContext(i, Event::NONE);
                 _fdcontexts[i]->_fd = i;
             }
         }
     }
+    // bool IoManager::delEvent(int fd, Event event)
+    //{
+    //     FdContext::ptr p = nullptr;
+    //     std::shared_lock<std::shared_mutex> rlock(_mutex);
+    //     if ((int)_fdcontexts.size()<fd)
+    //         return false;
+    //     p = _fdcontexts[fd];
+    //     rlock.unlock();
+    //     if (!(p->_event & event))
+    //         return false;
+    //     Event nevent = (Event)((p->_event) & (~event));
+    //     int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+    //     _epoll.ctlEvent(fd, EPOLLET | (int)nevent, op);
+    //     LOG_INFO(LOG_ROOT())<<"del... fd: "<<fd<<" "<<p->_event<<" "<<event<<" "<<op;
+    //     --_pendingEventCount;
+    //     p->_event = nevent;
+    //     if(event&READ)  p->getContext(READ).clear();
+    //     if(event&WRITE)  p->getContext(WRITE).clear();
+    //     return true;
+    // }
     bool IoManager::delEvent(int fd, Event event)
     {
-        FdContext::ptr p = nullptr;
-        std::shared_lock<std::shared_mutex> rlock(_mutex);
-        if ((int)_fdcontexts.size()<fd)
-            return false;
-        p = _fdcontexts[fd];
-        rlock.unlock();
-        //if (!(p->_event & event))
-        //    return false;
-        Event nevent = (Event)((p->_event) & (~event));
-        int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        _epoll.ctlEvent(fd, EPOLLET | (int)nevent, op);
-        LOG_INFO(LOG_ROOT())<<"del... fd: "<<fd<<" "<<p->_event<<" "<<event<<" "<<op;
-        --_pendingEventCount;
-        p->_event = nevent;
-        if(event&READ)  p->getContext(READ).clear();
-        if(event&WRITE)  p->getContext(WRITE).clear();
-        return true;
-    }
-    bool IoManager::cencelEvent(int fd, Event event)
-    {
-        FdContext::ptr p = nullptr;
-        std::shared_lock<std::shared_mutex> rlock(_mutex);
-        if ((int)_fdcontexts.size()<fd)
-            return false;
-        p = _fdcontexts[fd];
-        rlock.unlock();
-        if (!(p->_event & event))
-            return false;
-        Event nevent = (Event)((p->_event) & (~event));
-        int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        LOG_INFO(LOG_ROOT())<<"cencel fd: "<<fd;
-        _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
-        --_pendingEventCount;
-        p->triggerEvent(event);
-        return true;
-    }
-    bool IoManager::cencelAll(int fd)
-    {
-        FdContext::ptr p = nullptr;
-        std::shared_lock<std::shared_mutex> rlock(_mutex);
-        if ((int)_fdcontexts.size()<fd)
-            return false;
-        p = _fdcontexts[fd];
-        rlock.unlock();
-        if (!p->_event)
-            return false;
-        _epoll.delEvent(fd);
-        if (p->_event & READ)
+        FdContext *fd_ctx = nullptr;
+        std::shared_lock<std::shared_mutex> read_lock(_mutex); // 读锁
+        if ((int)_fdcontexts.size() > fd)
         {
-            p->triggerEvent(READ);
+            fd_ctx = _fdcontexts[fd];
+            read_lock.unlock();
+        }
+        else
+        {
+            read_lock.unlock();
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(fd_ctx->_mutex);
+
+        if (!(fd_ctx->_event & event))
+        {
+            return false;
+        }
+
+        Event new_events = (Event)(fd_ctx->_event & ~event);
+        int op = new_events ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+        epoll_event epevent;
+        epevent.events = EPOLLET | new_events;
+        epevent.data.ptr = fd_ctx;
+
+        _epoll.ctlEvent(fd, &epevent, op);
+
+        --_pendingEventCount;
+        fd_ctx->_event = new_events;
+
+        EventContext &event_ctx = fd_ctx->getContext(event);
+        event_ctx.clear();
+        return true;
+    }
+    bool IoManager::cancelEvent(int fd, Event event)
+    {
+        FdContext *fd_ctx = nullptr;
+        std::shared_lock<std::shared_mutex> read_lock(_mutex);
+        if ((int)_fdcontexts.size() > fd)
+        {
+            fd_ctx = _fdcontexts[fd];
+            read_lock.unlock();
+        }
+        else
+        {
+            read_lock.unlock();
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(fd_ctx->_mutex);
+
+        if (!(fd_ctx->_event & event))
+        {
+            return false;
+        }
+
+        Event new_events = (Event)(fd_ctx->_event & ~event);
+        int op = new_events ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+        epoll_event epevent;
+        epevent.events = EPOLLET | new_events;
+        epevent.data.ptr = fd_ctx;
+
+        _epoll.ctlEvent(fd, &epevent, op);
+
+        --_pendingEventCount;
+
+        fd_ctx->triggerEvent(event); // 和delete最后的处理不同一个是重置，一个是调用事件的回调函数
+        return true;
+    }
+    // bool IoManager::cencelEvent(int fd, Event event)
+    //{
+    //     FdContext::ptr p = nullptr;
+    //     std::shared_lock<std::shared_mutex> rlock(_mutex);
+    //     if ((int)_fdcontexts.size()<fd)
+    //         return false;
+    //     p = _fdcontexts[fd];
+    //     rlock.unlock();
+    //     if (!(p->_event & event))
+    //         return false;
+    //     Event nevent = (Event)((p->_event) & (~event));
+    //     int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+    //     LOG_INFO(LOG_ROOT())<<"cencel fd: "<<fd;
+    //     _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
+    //     --_pendingEventCount;
+    //     p->triggerEvent(event);
+    //     return true;
+    // }
+    bool IoManager::cancelAll(int fd)
+    {
+        FdContext *fd_ctx = nullptr;
+
+        std::shared_lock<std::shared_mutex> read_lock(_mutex);
+        if ((int)_fdcontexts.size() > fd)
+        {
+            fd_ctx = _fdcontexts[fd];
+            read_lock.unlock();
+        }
+        else
+        {
+            read_lock.unlock();
+            return false;
+        }
+
+        std::lock_guard<std::mutex> lock(fd_ctx->_mutex);
+
+        if (!fd_ctx->_event)
+        {
+            return false;
+        }
+
+        int op = EPOLL_CTL_DEL;
+        epoll_event epevent;
+        epevent.events = 0;
+        epevent.data.ptr = fd_ctx;
+
+        _epoll.ctlEvent(fd, &epevent, op);
+        if (fd_ctx->_event & READ)
+        {
+            fd_ctx->triggerEvent(READ);
             --_pendingEventCount;
         }
-        if (p->_event & WRITE)
+        if (fd_ctx->_event & WRITE)
         {
-            p->triggerEvent(WRITE);
+            fd_ctx->triggerEvent(WRITE);
             --_pendingEventCount;
         }
+
         return true;
     }
+    // bool IoManager::cencelAll(int fd)
+    //{
+    //     FdContext::ptr p = nullptr;
+    //     std::shared_lock<std::shared_mutex> rlock(_mutex);
+    //     if ((int)_fdcontexts.size()<fd)
+    //         return false;
+    //     p = _fdcontexts[fd];
+    //     rlock.unlock();
+    //     if (!p->_event)
+    //         return false;
+    //     _epoll.delEvent(fd);
+    //     if (p->_event & READ)
+    //     {
+    //         p->triggerEvent(READ);
+    //         --_pendingEventCount;
+    //     }
+    //     if (p->_event & WRITE)
+    //     {
+    //         p->triggerEvent(WRITE);
+    //         --_pendingEventCount;
+    //     }
+    //     return true;
+    // }
     void IoManager::tickle()
     {
         _tfd.tickle();
@@ -142,26 +263,28 @@ namespace MindbniM
     }
     Task<void> IoManager::idle()
     {
-        // std::cout<<"idle to epoll_wait"<<std::endl;
-        //LOG_DEBUG(LOG_ROOT()) << "idle wait";
-        std::vector<epoll_event> events;
-        while (1)
+        // 使用 std::unique_ptr 动态分配了一个大小为 MAX_EVENTS 的 epoll_event 数组，用于存储从 epoll_wait 获取的事件。
+        static std::vector<epoll_event> events;
+
+        while (true)
         {
-            //LOG_DEBUG(LOG_ROOT()) << "IoManager::idle thread is " << Thread::GetName();
+            //LOG_DEBUG(LOG_ROOT()) << "name = " << getName() << " idle enters in thread: " << Thread::GetName() << std::endl;
             if (stopping())
             {
-                LOG_DEBUG(LOG_ROOT()) << "IoManager is exits " << Thread::GetName();
-                co_return;
+                //std::cout << "name = " << getName() << " idle exits in thread: " << Thread::GetThreadId() << std::endl;
+                break;
             }
-            int n = 0;
-            while (1)
+
+            // blocked at epoll_wait
+            int rt = 0;
+            while (true)
             {
-                static uint64_t MaxTimeOut = 5000;
-                uint64_t next = _tfd.getNextTimer();
-                next = std::min(next, MaxTimeOut);
-                n = _epoll.wait(events, next);
-                LOG_DEBUG(LOG_ROOT())<<_name<<" -> "<<n<<" events is readly";
-                if (n < 0 && errno == EINTR)
+                static const uint64_t MAX_TIMEOUT = 5000;
+                uint64_t next_timeout = _tfd.getNextTimer();            
+                next_timeout = std::min(next_timeout, MAX_TIMEOUT); 
+
+                rt=_epoll.wait(events, (int)next_timeout); 
+                if (rt < 0 && errno == EINTR) // 所rt小于0代表无限阻塞，errno是EINTR(表示信号中断)
                 {
                     continue;
                 }
@@ -169,62 +292,77 @@ namespace MindbniM
                 {
                     break;
                 }
-            }
-            std::vector<std::function<void()>> cbs;
+            }; 
+            LOG_DEBUG(LOG_ROOT()) << "epoll wait... n: " << rt;
+            std::vector<std::function<void()>>  cbs;   
             _tfd.listcb(cbs);
             if (!cbs.empty())
             {
-                push(cbs.begin(), cbs.end());
+                for (const auto &cb : cbs)
+                {
+                    push(cb); // 将所有超时的回调函数添加到调度器的调度队列中。
+                }
                 cbs.clear();
             }
-            for (int i = 0; i < n; i++)
+
+            for (int i = 0; i < rt; ++i)
             {
-                epoll_event &ev = events[i];
-                LOG_INFO(LOG_ROOT())<<_name<<" -> "<<ev.data.fd<<" is readly : "<<ev.events;
-                if (ev.data.fd == _tfd.fd())
+                epoll_event &event = events[i];
+
+                // tickle event
+                // 检查当前事件是否是 tickle 事件（即用于唤醒空闲线程的事件）。
+                if (event.data.fd == _tfd.fd())
                 {
-                    char temp[256];
-                    while (read(_tfd.fd(), temp, sizeof(temp)) > 0) ;
+                    uint8_t dummy[256];
+                    // edge triggered -> exhaust
+                    while (read(_tfd.fd(), dummy, sizeof(dummy)) > 0);
                     continue;
                 }
-                std::shared_lock<std::shared_mutex> rlock(_mutex);
-                FdContext::ptr p = _fdcontexts[ev.data.fd];
-                rlock.unlock();
-                if (ev.events & (EPOLLERR | EPOLLHUP))
+
+                LOG_INFO(LOG_ROOT()) << "event trigger fd: " << event.data.fd << " events: " << event.events;
+
+                FdContext *fd_ctx = (FdContext *)event.data.ptr; 
+                std::lock_guard<std::mutex> lock(fd_ctx->_mutex);
+
+                // 如果当前事件是错误或挂起（EPOLLERR 或 EPOLLHUP），则将其转换为可读或可写事件（EPOLLIN 或 EPOLLOUT），以便后续处理。
+                if (event.events & (EPOLLERR | EPOLLHUP))
                 {
-                    ev.events |= (EPOLLIN | EPOLLOUT) & p->_event;
+                    event.events |= (EPOLLIN | EPOLLOUT) & fd_ctx->_event;
                 }
-                int revent = 0;
-                if (ev.events & EPOLLIN)
+                int real_events = NONE;
+                if (event.events & EPOLLIN)
                 {
-                    revent |= READ;
+                    real_events |= READ;
                 }
-                if (ev.events & EPOLLOUT)
+                if (event.events & EPOLLOUT)
                 {
-                    revent |= WRITE;
+                    real_events |= WRITE;
                 }
-                if ((p->_event & revent) == NONE)
+
+                if ((fd_ctx->_event & real_events) == NONE)
                 {
                     continue;
                 }
-                //int mevent = p->_event & (~revent);
-                //int op = mevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-                //LOG_DEBUG(LOG_ROOT())<<op<<" "<<mevent;
-                //_epoll.ctlEvent(ev.data.fd, mevent | EPOLLET, op);
-                if (revent & READ)
+
+                // 这里进行取反就是计算剩余未发送的的事件
+                int left_events = (fd_ctx->_event & ~real_events);
+
+                int op = left_events ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
+                event.events = EPOLLET | left_events; 
+
+                _epoll.ctlEvent(fd_ctx->_fd, &event, op); // 根据之前计算的操作（op），调用 epoll_ctl 更新或删除 epoll 监听，如果失败，打印错误并继续处理下一个事件。
+                // 触发事件，事件的执行
+                if (real_events & READ)
                 {
-                    LOG_DEBUG(LOG_ROOT())<<"read event";
-                    p->triggerEvent(READ);
+                    fd_ctx->triggerEvent(READ);
                     --_pendingEventCount;
                 }
-                if (revent & WRITE)
+                if (real_events & WRITE)
                 {
-                    LOG_DEBUG(LOG_ROOT())<<"write event";
-                    p->triggerEvent(WRITE);
+                    fd_ctx->triggerEvent(WRITE);
                     --_pendingEventCount;
                 }
-            }
-            events.clear();
+            } 
             co_yield 0;
         }
     }

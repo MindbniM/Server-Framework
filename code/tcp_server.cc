@@ -24,15 +24,15 @@ namespace MindbniM
             {
                 int event = READ | WRITE;
                 IoManager::GetThis()->delEvent(conn->_sock->getSock(), (Event)event);
-                //if (_root)
-                //    _root->delConnect(shared_from_this());
+                if (conn->_root)
+                    conn->_root->delConnect(conn);
                 conn->_sock->close();
                 co_return;
             }
             if (conn->_rcb)
             {
-                IoManager::GetThis()->push(conn->_rcb);
-                //conn->_rcb();
+                //IoManager::GetThis()->push(conn->_rcb);
+                conn->_rcb();
             }
             co_yield 0;
         }
