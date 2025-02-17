@@ -38,13 +38,15 @@ namespace MindbniM
 
         void Send(const std::string& message,int flags);
 
-        TcpSocket::ptr _sock;       //Tcp套接字
-        Buffer _in;                 //输入缓冲区
-        Buffer _out;                //输出缓冲区
-        CallBack _rcb;              //读到消息的回调
-        static int _maxBuferSize;   //最大缓冲区大小
-        static int _timeout;        //最大检测缓冲区时间
-        TcpServer* _root;           //所属TcpServer
+        TcpSocket::ptr _sock;           //Tcp套接字
+        Buffer _in;                     //输入缓冲区
+        Buffer _out;                    //输出缓冲区
+        CallBack _rcb;                  //读到消息的回调
+        static int _maxBuferSize;       //最大缓冲区大小
+        static int _timeout;            //最大检测缓冲区时间
+        TcpServer* _root;               //所属TcpServer
+        std::coroutine_handle<> _rcor;  //recv协程
+        std::coroutine_handle<> _scor;  //send协程
     };
 
     /**

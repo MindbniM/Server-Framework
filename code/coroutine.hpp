@@ -304,6 +304,7 @@ namespace MindbniM
 
     private:
         std::coroutine_handle<promise_type> _coroutine = nullptr;
+        bool _managed_by_scheduler = false;
     };
 
 }

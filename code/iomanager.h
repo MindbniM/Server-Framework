@@ -204,6 +204,7 @@ namespace MindbniM
  
         LOG_INFO(LOG_ROOT()) << "add " << fd << " " << event << "(" << EPOLLIN << " " << EPOLLOUT << ")";
         int op = fd_ctx->_event ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
+
         epoll_event epevent;
         epevent.events   = EPOLLET | fd_ctx->_event | event;
         epevent.data.ptr = fd_ctx;
