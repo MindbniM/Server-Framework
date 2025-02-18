@@ -8,6 +8,7 @@ set(CMAKE_BUILD_TYPE Debug)
 set(target "test")
 
 set(LIB_SRC 
+
     code/log.cc
     code/util.cc
     code/thread.cc

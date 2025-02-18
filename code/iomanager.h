@@ -143,40 +143,6 @@ namespace MindbniM
         TimerFd _tfd;                                       //定时器
     };
 
-    //template<TaskType F>
-    //bool IoManager::addEvent(int fd,Event event,F cb)
-    //{
-    //    FdContext::ptr p=nullptr;
-    //    std::shared_lock<std::shared_mutex> rlock(_mutex);
-    //    if((int)_fdcontexts.size()>fd)
-    //    {
-    //        p=_fdcontexts[fd];
-    //        rlock.unlock();
-    //    }
-    //    else 
-    //    {
-    //        rlock.unlock();
-    //        std::unique_lock<std::shared_mutex> wlock(_mutex);
-    //        contextResize(fd * 1.5);
-    //        p=_fdcontexts[fd];
-    //    }
-    //    //if(p->_event&event)
-    //    //{
-    //    //    LOG_INFO(LOG_ROOT())<<fd<<" 事件重复 "<<p->_event<<" "<<event;
-    //    //    return false;
-    //    //}
-    //    LOG_INFO(LOG_ROOT())<<"add "<<fd<<" "<<event<<"("<<EPOLLIN<<" "<<EPOLLOUT<<") ";
-    //    _epoll.ctlEvent(fd,EPOLLET|(int)event|p->_event,EPOLL_CTL_ADD);
-    //    _pendingEventCount++;
-    //    int _ev_=p->_event;
-    //    _ev_|=(int)event;
-    //    p->_event=(Event)_ev_;
-    //    //LOG_DEBUG(LOG_ROOT())<<_name<<" add event fd:"<<fd<<" "<<p->_event;
-    //    EventContext& ev=p->getContext(event);
-    //    ev._root=Schedule::GetThis();
-    //    ev._task=TaskAndF(cb);
-    //    return true;
-    //}
     template<TaskType F>
     bool IoManager::addEvent(int fd,Event event,F cb,bool recurring)
     {

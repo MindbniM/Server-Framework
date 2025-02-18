@@ -44,6 +44,8 @@ namespace MindbniM
     {
         //这是日志配置
         ConfigVar<LoggerManager*>::ptr g_logs=Config::Lookup("logs",LoggerMgr::GetInstance(),"logs config");
+        //日志事务性写入等级
+        ConfigVar<LogLevel::Level>::ptr flush_on=Config::Lookup("flush_on",LogLevel::Level::ERROR,"log flush_on");
     }
 
 
@@ -310,6 +312,10 @@ namespace MindbniM
         {
             std::unique_lock<Spinlock> lock(_mutex);
             _file<<_format->format(event);
+            if(event->_level>=Configs::flush_on->getVal())
+            {
+                reopen();
+            }
         }
     }
     std::string FileoutAppender::getout()

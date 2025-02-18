@@ -78,26 +78,6 @@ namespace MindbniM
             }
         }
     }
-    // bool IoManager::delEvent(int fd, Event event)
-    //{
-    //     FdContext::ptr p = nullptr;
-    //     std::shared_lock<std::shared_mutex> rlock(_mutex);
-    //     if ((int)_fdcontexts.size()<fd)
-    //         return false;
-    //     p = _fdcontexts[fd];
-    //     rlock.unlock();
-    //     if (!(p->_event & event))
-    //         return false;
-    //     Event nevent = (Event)((p->_event) & (~event));
-    //     int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-    //     _epoll.ctlEvent(fd, EPOLLET | (int)nevent, op);
-    //     LOG_INFO(LOG_ROOT())<<"del... fd: "<<fd<<" "<<p->_event<<" "<<event<<" "<<op;
-    //     --_pendingEventCount;
-    //     p->_event = nevent;
-    //     if(event&READ)  p->getContext(READ).clear();
-    //     if(event&WRITE)  p->getContext(WRITE).clear();
-    //     return true;
-    // }
     bool IoManager::delEvent(int fd, Event event)
     {
         FdContext *fd_ctx = nullptr;
@@ -169,24 +149,6 @@ namespace MindbniM
         fd_ctx->triggerEvent(event); // 和delete最后的处理不同一个是重置，一个是调用事件的回调函数
         return true;
     }
-    // bool IoManager::cencelEvent(int fd, Event event)
-    //{
-    //     FdContext::ptr p = nullptr;
-    //     std::shared_lock<std::shared_mutex> rlock(_mutex);
-    //     if ((int)_fdcontexts.size()<fd)
-    //         return false;
-    //     p = _fdcontexts[fd];
-    //     rlock.unlock();
-    //     if (!(p->_event & event))
-    //         return false;
-    //     Event nevent = (Event)((p->_event) & (~event));
-    //     int op = nevent ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-    //     LOG_INFO(LOG_ROOT())<<"cencel fd: "<<fd;
-    //     _epoll.ctlEvent(fd, EPOLLET | (int)event, op);
-    //     --_pendingEventCount;
-    //     p->triggerEvent(event);
-    //     return true;
-    // }
     bool IoManager::cancelAll(int fd)
     {
         FdContext *fd_ctx = nullptr;
@@ -229,29 +191,6 @@ namespace MindbniM
 
         return true;
     }
-    // bool IoManager::cencelAll(int fd)
-    //{
-    //     FdContext::ptr p = nullptr;
-    //     std::shared_lock<std::shared_mutex> rlock(_mutex);
-    //     if ((int)_fdcontexts.size()<fd)
-    //         return false;
-    //     p = _fdcontexts[fd];
-    //     rlock.unlock();
-    //     if (!p->_event)
-    //         return false;
-    //     _epoll.delEvent(fd);
-    //     if (p->_event & READ)
-    //     {
-    //         p->triggerEvent(READ);
-    //         --_pendingEventCount;
-    //     }
-    //     if (p->_event & WRITE)
-    //     {
-    //         p->triggerEvent(WRITE);
-    //         --_pendingEventCount;
-    //     }
-    //     return true;
-    // }
     void IoManager::tickle()
     {
         _tfd.tickle();
